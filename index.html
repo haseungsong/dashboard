@@ -165,7 +165,7 @@ function parseTimeRange(str){
    2) 상태
    ========================= */
 let state = {
-  program:"", // CSV 로드 후 세팅 (Type)
+  program:"", // CSV 로드 후 세팅 (Type 또는 'ALL')
   date:"",    // CSV 로드 후 세팅 (첫 날짜)
   q:"",
   place:"ALL",
@@ -190,7 +190,7 @@ function rowsToItems(rows){
     const type = norm(r.Type) || "Program";
     const {start,end} = parseTimeRange(r.Time);
     return {
-      program: type,                 // 탭 기준 (예: "미팅")
+      program: type,                 // 탭 기준 (예: "미팅", "점심"…)
       id: `ROW-${idx+1}`,
       date: norm(r.Date),
       company: "",                   // CSV에 없으므로 공란
@@ -210,13 +210,13 @@ function rowsToItems(rows){
 function applyItems(items){
   DATA.items = items;
 
-  // Type(=program)별 탭 생성 — CSV에 있는 그대로의 텍스트로
+  // Type(=program) 목록
   const progIds = [];
   items.forEach(i=>{ if(!progIds.includes(i.program)) progIds.push(i.program); });
   DATA.programs = progIds.map(id => ({ id, name:id }));
 
   // 기본 program/date 세팅 (CSV 첫 행 기준)
-  state.program = progIds[0] || "";
+  state.program = DATA.programs[0]?.id || "ALL";
   state.date = items[0]?.date || new Date().toISOString().slice(0,10);
 
   init();
@@ -231,26 +231,34 @@ function applyItems(items){
   }catch(e){
     console.warn('DB.csv 로드 실패:', e);
     // 비상 초기화(빈 상태)
-    DATA.programs = [{id:"Program",name:"Program"}];
-    state.program = "Program";
+    DATA.programs = [];
+    state.program = "ALL";
     state.date = new Date().toISOString().slice(0,10);
     init();
   }
 })();
-  
+
 /* =========================
    4) UI 초기화
    ========================= */
+function datesForProgram(prog){
+  const src = DATA.items.filter(x => prog==='ALL' ? true : x.program===prog);
+  return uniq(src, "date");
+}
+
 function init(){
-  // 프로그램 탭 (Type 값 그대로)
-  const tabs = DATA.programs.map(p=>`<button class="tab ${p.id===state.program?"active":""}" data-id="${p.id}">${p.name}</button>`).join('');
-  $("#programTabs").innerHTML = tabs;
+  // 프로그램 탭 (Type 값 + 오른쪽 끝 ALL)
+  const tabHtml =
+    DATA.programs.map(p=>`<button class="tab ${p.id===state.program?"active":""}" data-id="${p.id}">${p.name}</button>`).join('') +
+    `<button class="tab ${state.program==='ALL'?"active":""}" data-id="ALL">ALL</button>`;
+  $("#programTabs").innerHTML = tabHtml;
+
   $("#programTabs").addEventListener("click", e=>{
     const id = e.target.dataset.id; if(!id) return;
     state.program=id;
     $$("#programTabs .tab").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
-    // 탭 변경 시, 해당 program이 가진 날짜 중 현재 state.date가 없으면 첫 날짜로 보정
-    const dates = uniq(DATA.items.filter(x=>x.program===state.program),"date");
+    // 탭 변경 시: 해당 탭(program)이 가진 날짜에 현재 date가 없으면 첫 날짜로 보정
+    const dates = datesForProgram(state.program);
     if(!dates.includes(state.date)) state.date = dates[0] || state.date;
     render();
   });
@@ -268,14 +276,15 @@ function init(){
    5) 렌더
    ========================= */
 function filterItems(){
-  const items = DATA.items.filter(it => it.program===state.program && it.date===state.date);
+  // 🔑 program==='ALL' 이면 Type 필터를 해제하고, 선택 날짜만 적용
+  const pool = DATA.items.filter(it => it.date===state.date && (state.program==='ALL' || it.program===state.program));
 
   const q = (state.q || "").toLowerCase();
-  return items.filter(it=>{
+  return pool.filter(it=>{
     const text = [
       it.place, it.owner, it.title, it.company || "",
       it.role, it.items, it.remarks || "",
-      it.date, it.start, it.end
+      it.date, it.start, it.end, it.program
     ].join(" ").toLowerCase();
 
     const okQ = !q || text.includes(q);
@@ -286,10 +295,10 @@ function filterItems(){
   });
 }
 
-function renderFilters(allProgramItems){
-  const places = ["ALL", ...uniq(allProgramItems,"place")];
-  const owners = ["ALL", ...uniq(allProgramItems,"owner")];
-  const comps  = ["ALL", ...uniq(allProgramItems.map(x=>({company:x.company||"-"})),"company").map(o=>o.company)];
+function renderFilters(allBaseItems){
+  const places = ["ALL", ...uniq(allBaseItems,"place")];
+  const owners = ["ALL", ...uniq(allBaseItems,"owner")];
+  const comps  = ["ALL", ...uniq(allBaseItems.map(x=>({company:x.company||"-"})),"company").map(o=>o.company)];
   $("#place").innerHTML = places.map(v=>`<option ${state.place===v?"selected":""} value="${v}">${v}</option>`).join('');
   $("#owner").innerHTML = owners.map(v=>`<option ${state.owner===v?"selected":""} value="${v}">${v}</option>`).join('');
   $("#company").innerHTML= comps.map(v=>`<option ${state.company===v?"selected":""} value="${v}">${v}</option>`).join('');
@@ -389,9 +398,11 @@ function rowNowNext(it,label){
 }
 
 function render(){
-  const allForProgram = DATA.items.filter(i=>i.program===state.program && i.date===state.date);
+  // 필터 드롭다운 생성을 위한 베이스(현재 날짜 + program 적용, 단 program=ALL이면 날짜만)
+  const base = DATA.items.filter(i => i.date===state.date && (state.program==='ALL' || i.program===state.program));
   const items = filterItems();
-  renderFilters(DATA.items.filter(i=>i.program===state.program && i.date===state.date));
+
+  renderFilters(base);
   renderTimeline(items);
   renderSide(items);
 }
