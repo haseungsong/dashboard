@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>현장 운영 타임라인 (No Emergency)</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e5e7eb;
+    --accent:#2563eb; --bar:#111827; --barLive:#0ea5e9; --tag:#eef2ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif}
+  .wrap{max-width:1200px;margin:24px auto;padding:0 16px}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+  h1{margin:0 0 8px;font-size:22px;font-weight:800;letter-spacing:-.02em}
+  .muted{color:var(--muted)}
+  .controls select,.controls input{height:36px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:#fff}
+  .controls{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:8px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}
+  .tab{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer}
+  .tab.active{background:#111827;color:#fff;border-color:#111827}
+  .grid{display:grid;grid-template-columns:140px 1fr;gap:8px}
+  .lane-head{padding:8px 10px;border-radius:10px;background:#fff;border:1px solid var(--line);font-weight:700}
+  .timeline{position:relative;border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden}
+  .ticks{position:absolute;inset:0;pointer-events:none}
+  .ticks div{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+  .ticks label{position:absolute;top:4px;transform:translateX(-50%);font-size:11px;color:var(--muted);background:#fff;padding:0 4px}
+  .bars{position:relative;padding:22px 0 26px}
+  .bar{position:absolute;height:28px;border-radius:7px;color:#fff;background:#111827;display:flex;align-items:center;gap:6px;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid #0b1220}
+  .bar.live{background:var(--barLive);border-color:#056081}
+  .bar small{opacity:.9}
+  .now{position:absolute;top:0;bottom:0;width:2px;background:#ef4444}
+  .legend{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:#f1f5f9;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:12px}
+  .side{flex:1 1 320px}
+  .side .sec h3{margin:0 0 6px;font-size:15px}
+  .list{display:flex;flex-direction:column;gap:6px}
+  .list .item{padding:8px;border:1px solid var(--line);border-radius:10px;background:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:10px;height:34px;padding:0 10px;cursor:pointer}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  /* modal */
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10}
+  .backdrop.show{display:flex}
+  .modal{background:#fff;border-radius:14px;border:1px solid var(--line);max-width:640px;width:92vw;padding:14px}
+  .modal h2{margin:0 0 8px}
+  .kv{display:grid;grid-template-columns:110px 1fr;gap:6px;margin:10px 0}
+  .kv div{padding:6px 8px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .tag{background:var(--tag);border:1px solid #c7d2fe;border-radius:999px;padding:2px 8px;font-size:12px}
+  a.tel{color:#111827;text-decoration:underline}
+  @media (max-width:900px){.controls{grid-template-columns:1fr 1fr 1fr 1fr;}.hide-m{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row" style="align-items:flex-end;justify-content:space-between">
+    <div>
+      <div class="muted">KdKOO 현장 운영판</div>
+      <h1>장소·시간·R&R 타임라인</h1>
+      <div class="legend">
+        <span class="chip">검정=예약됨</span><span class="chip">하늘색=진행중</span><span class="chip">빨간선=현재시각</span>
+      </div>
+    </div>
+    <div class="tabs" id="programTabs"></div>
+  </div>
+
+  <div class="card controls">
+    <input id="q" placeholder="검색 (장소/담당/이벤트/회사)">
+    <select id="place"></select>
+    <select id="owner"></select>
+    <select id="company"></select>
+    <input id="date" type="date">
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <div class="card" style="flex:1 1 740px">
+      <div class="grid" id="grid"></div>
+    </div>
+
+    <div class="side">
+      <div class="card sec">
+        <h3>Now & Next</h3>
+        <div class="list" id="nowNext"></div>
+      </div>
+      <div class="card sec">
+        <h3>연락 (필터 적용)</h3>
+        <div class="list" id="contacts"></div>
+      </div>
+      <div class="card sec">
+        <h3>요약</h3>
+        <div id="summary" class="list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="backdrop" id="backdrop">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+      <div>
+        <div class="muted" id="m_id"></div>
+        <h2 id="m_title"></h2>
+      </div>
+      <button class="btn" onclick="closeModal()">닫기</button>
+    </div>
+    <div class="kv">
+      <div>일자</div><div id="m_date"></div>
+      <div>시간</div><div id="m_time"></div>
+      <div>장소</div><div id="m_place"></div>
+      <div>회사</div><div id="m_company"></div>
+      <div>담당</div><div id="m_owner"></div>
+    </div>
+    <div class="kv">
+      <div>Items</div><div id="m_items"></div>
+      <div>Role</div><div id="m_role"></div>
+      <div>Remarks</div><div id="m_remarks"></div>
+      <div>연락</div><div id="m_contact"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================
+   1) 샘플 데이터 (여러 프로그램)
+   ========================= */
+const DATA = {
+  meta:{startHour:8,endHour:22},
+  programs:[
+    { id:"P-1", name:"Main Schedule" },
+    { id:"P-2", name:"VIP Track" },
+    { id:"P-3", name:"Operations" }
+  ],
+  items:[
+    // ── Program 1
+    { program:"P-1", id:"A001", date:"2025-10-07", company:"kdKOO", owner:"MJ", place:"비즈니스 미팅", start:"09:00", end:"11:00",
+      title:"지법인 미팅룸 세팅 및 응대", items:"음료/스낵 세팅, 안내", role:"현장 응대·세팅", remarks:"",
+      phone:"+55-11-9000-0001", channel:"CH-1" },
+    { program:"P-1", id:"A002", date:"2025-10-07", company:"kdKOO", owner:"MJ", place:"Centre", start:"11:30", end:"14:00",
+      title:"Centre 예약 확인/자리 세팅", items:"예약 확인, 테이블 배치", role:"레스토랑 협조", remarks:"",
+      phone:"+55-11-9000-0001", channel:"CH-1" },
+    { program:"P-1", id:"A003", date:"2025-10-07", company:"kdKOO", owner:"SY", place:"비즈니스 미팅", start:"09:00", end:"12:00",
+      title:"미팅룸 세팅 및 응대", items:"음료/스낵, 게스트 케어", role:"현장 응대", remarks:"",
+      phone:"+55-11-9000-0002", channel:"CH-2" },
+    { program:"P-1", id:"A004", date:"2025-10-07", company:"kdKOO", owner:"SY", place:"리움 뮤지엄", start:"14:00", end:"18:00",
+      title:"투어 준비 및 안내", items:"디지털도슨트 리플렛", role:"투어 진행", remarks:"",
+      phone:"+55-11-9000-0002", channel:"CH-2" },
+    { program:"P-1", id:"A005", date:"2025-10-07", company:"kdKOO", owner:"JY", place:"비즈니스 미팅", start:"09:00", end:"12:00",
+      title:"미팅룸 세팅", items:"음료/스낵, 게스트", role:"현장", remarks:"",
+      phone:"+55-11-9000-0003", channel:"CH-2" },
+    { program:"P-1", id:"A006", date:"2025-10-07", company:"kdKOO", owner:"Tea", place:"비즈니스 미팅", start:"09:00", end:"12:00",
+      title:"세팅 및 응대", items:"음료/스낵", role:"현장", remarks:"",
+      phone:"+55-11-9000-0004", channel:"CH-1" },
+    { program:"P-1", id:"A007", date:"2025-10-07", company:"kdKOO", owner:"Jiwoo", place:"Line de Hannam", start:"12:00", end:"13:30",
+      title:"차량 정차 위치 안내", items:"대기/하차 안내", role:"동선 관리", remarks:"",
+      phone:"+55-11-9000-0005", channel:"CH-3" },
+    { program:"P-1", id:"A008", date:"2025-10-07", company:"kdKOO", owner:"TM 01", place:"삼성스토어", start:"15:00", end:"18:00",
+      title:"정차 위치 대기/하차 안내", items:"상암→호텔", role:"차량 동선", remarks:"",
+      phone:"+55-11-9000-0006", channel:"CH-3" },
+    { program:"P-1", id:"A009", date:"2025-10-07", company:"kdKOO", owner:"TM 02", place:"삼원가든", start:"20:00", end:"20:30",
+      title:"정차 위치 대기/하차 안내", items:"식당→호텔", role:"차량 동선", remarks:"",
+      phone:"+55-11-9000-0007", channel:"CH-3" },
+
+    // ── Program 2 (VIP)
+    { program:"P-2", id:"V101", date:"2025-10-07", company:"VIP", owner:"Host A", place:"VIP Lounge", start:"09:30", end:"11:30",
+      title:"VIP 리셉션", items:"웰컴/동선 브리핑", role:"리셉션", remarks:"",
+      phone:"+55-11-9100-0001", channel:"CH-5" },
+    { program:"P-2", id:"V102", date:"2025-10-07", company:"VIP", owner:"Host A", place:"Hall A", start:"13:00", end:"15:00",
+      title:"VIP 미팅", items:"통역/케이터링", role:"미팅 운영", remarks:"",
+      phone:"+55-11-9100-0001", channel:"CH-5" },
+
+    // ── Program 3 (Operations)
+    { program:"P-3", id:"O201", date:"2025-10-07", company:"Ops", owner:"장비", place:"Hall B", start:"08:30", end:"10:00",
+      title:"장비 점검", items:"프로젝터/마이크", role:"기술", remarks:"",
+      phone:"+55-11-9200-0001", channel:"CH-6" },
+    { program:"P-3", id:"O202", date:"2025-10-07", company:"Ops", owner:"안전", place:"Hall B", start:"10:00", end:"11:00",
+      title:"안전 라운드", items:"비상구/표지판", role:"안전", remarks:"",
+      phone:"+55-11-9200-0002", channel:"CH-6" },
+  ]
+};
+
+/* =========================
+   2) 도우미
+   ========================= */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+function toMin(hhmm){const [h,m]=hhmm.split(":").map(Number);return h*60+m}
+function pct(min){const start=DATA.meta.startHour*60, end=DATA.meta.endHour*60; return ( (min-start)/(end-start) )*100 }
+function fmtTime(a,b){return `${a}${b?`–${b}`:""}`}
+
+function uniq(arr, key){return [...new Set(arr.map(o=>o[key]))]}
+
+/* =========================
+   3) 상태
+   ========================= */
+let state = {
+  program:"P-1",
+  date:"2025-10-07",
+  q:"",
+  place:"ALL",
+  owner:"ALL",
+  company:"ALL",
+};
+
+/* =========================
+   4) UI 초기화
+   ========================= */
+function init(){
+  // 프로그램 탭
+  const tabs = DATA.programs.map(p=>`<button class="tab ${p.id===state.program?"active":""}" data-id="${p.id}">${p.name}</button>`).join('');
+  $("#programTabs").innerHTML = tabs;
+  $("#programTabs").addEventListener("click", e=>{
+    const id = e.target.dataset.id; if(!id) return;
+    state.program=id; $$("#programTabs .tab").forEach(b=>b.classList.toggle("active",b.dataset.id===id)); render();
+  });
+
+  // 날짜/필터
+  $("#date").value = state.date;
+  $("#date").addEventListener("change", e=>{ state.date=e.target.value; render() });
+  $("#q").addEventListener("input", e=>{ state.q=e.target.value.trim().toLowerCase(); render() });
+
+  // 동적 옵션은 렌더 때마다 갱신
+  render();
+
+  // 현재시각선 갱신
+  setInterval(updateNowLine, 1000*30);
+}
+
+/* =========================
+   5) 렌더
+   ========================= */
+function filterItems(){
+  const items = DATA.items.filter(it => it.program===state.program && it.date===state.date);
+  return items.filter(it=>{
+    const text = `${it.place} ${it.owner} ${it.title} ${it.company} ${it.role} ${it.items}`.toLowerCase();
+    const okQ = !state.q || text.includes(state.q);
+    const okP = state.place==="ALL" || it.place===state.place;
+    const okO = state.owner==="ALL" || it.owner===state.owner;
+    const okC = state.company==="ALL" || it.company===state.company;
+    return okQ && okP && okO && okC;
+  });
+}
+
+function renderFilters(items){
+  const places = ["ALL", ...uniq(items,"place")];
+  const owners = ["ALL", ...uniq(items,"owner")];
+  const comps  = ["ALL", ...uniq(items,"company")];
+  $("#place").innerHTML = places.map(v=>`<option ${state.place===v?"selected":""} value="${v}">${v}</option>`).join('');
+  $("#owner").innerHTML = owners.map(v=>`<option ${state.owner===v?"selected":""} value="${v}">${v}</option>`).join('');
+  $("#company").innerHTML= comps.map(v=>`<option ${state.company===v?"selected":""} value="${v}">${v}</option>`).join('');
+  $("#place").onchange = e=>{state.place=e.target.value; render()}
+  $("#owner").onchange = e=>{state.owner=e.target.value; render()}
+  $("#company").onchange = e=>{state.company=e.target.value; render()}
+}
+
+function renderTimeline(items){
+  const grid = $("#grid");
+  const places = uniq(items,"place").sort((a,b)=>a.localeCompare(b));
+  const startMin = DATA.meta.startHour*60, endMin = DATA.meta.endHour*60;
+
+  // header row: hour ticks
+  const headHTML = places.map(p=>`
+    <div class="lane-head">${p}</div>
+    <div class="timeline">
+      <div class="ticks" data-ticks></div>
+      <div class="bars" data-bars></div>
+      <div class="now" data-now style="display:none"></div>
+    </div>
+  `).join('');
+  grid.innerHTML = `<div class="hide-m"></div>
+    <div class="timeline" style="height:34px">
+      <div class="ticks" id="topTicks"></div>
+    </div>` + headHTML;
+
+  // ticks
+  function buildTicks(el){
+    let html=""; for(let m=startMin; m<=endMin; m+=60){
+      const left=pct(m); html+=`<div style="left:${left}%;"></div><label style="left:${left}%;">${String(Math.floor(m/60)).padStart(2,"0")}:00</label>`;
+    }
+    el.innerHTML = html;
+  }
+  buildTicks($("#topTicks"));
+  $$("#grid [data-ticks]").forEach(buildTicks);
+
+  // bars
+  places.forEach((place, idx)=>{
+    const laneItems = items.filter(i=>i.place===place).sort((a,b)=>toMin(a.start)-toMin(b.start));
+    const bars = grid.querySelectorAll("[data-bars]")[idx];
+    let html="";
+    // stacking when overlapping
+    const rows=[];
+    laneItems.forEach(it=>{
+      const s=toMin(it.start), e=toMin(it.end||it.start), bar={s,e,item:it};
+      let row=rows.find(r=>r[r.length-1].e<=s); // first row that ends before start
+      if(!row){row=[];rows.push(row)}
+      row.push(bar);
+    });
+
+    rows.forEach((row, rIdx)=>{
+      row.forEach(({s,e,item})=>{
+        const left=pct(s), width=pct(e)-pct(s);
+        const live = nowInRange(s,e) ? " live" : "";
+        html += `<div class="bar${live}" style="left:${left}%;width:${width}%;top:${rIdx*34}px" onclick='openModal(${JSON.stringify(JSON.stringify(item))})'>
+          <b>${item.owner}</b> <small>${item.title}</small> <small class="muted">(${fmtTime(item.start,item.end)})</small>
+        </div>`;
+      });
+    });
+
+    bars.style.height = `${rows.length? rows.length*34+6 : 34}px`;
+    bars.innerHTML = html;
+  });
+
+  updateNowLine();
+}
+
+function renderSide(items){
+  const nowM = getNowMin();
+  const list = items
+    .map(it=>({...it, s:toMin(it.start), e:toMin(it.end||it.start)}))
+    .sort((a,b)=>a.s-b.s);
+
+  const now = list.filter(it=>it.s<=nowM && nowM<=it.e);
+  const next = list.filter(it=>it.s>nowM).slice(0,3);
+
+  $("#nowNext").innerHTML = `
+    ${now.map(it=>rowNowNext(it,"진행중")).join("")}
+    ${next.map(it=>rowNowNext(it,"다음")).join("")}
+    ${!now.length && !next.length ? `<div class="item"><div class="muted">표시할 일정이 없습니다.</div></div>`:""}
+  `;
+
+  // 연락
+  const contacts = uniq(items.map(it=>({owner:it.owner, phone:it.phone, channel:it.channel})),"owner")
+    .map(o=>o);
+  $("#contacts").innerHTML = contacts.map(c=>`
+    <div class="item">
+      <div><b>${c.owner}</b> <span class="muted">(${c.channel||"-"})</span></div>
+      <div><a class="tel" href="tel:${c.phone}">전화</a></div>
+    </div>`).join('') || `<div class="item"><div class="muted">담당자 없음</div></div>`;
+
+  // 요약
+  $("#summary").innerHTML = `
+    <div class="item"><div>총 일정</div><div><b>${items.length}</b></div></div>
+    <div class="item"><div>장소 수</div><div><b>${uniq(items,"place").length}</b></div></div>
+    <div class="item"><div>담당자 수</div><div><b>${uniq(items,"owner").length}</b></div></div>
+  `;
+}
+
+function rowNowNext(it,label){
+  return `<div class="item" onclick='openModal(${JSON.stringify(JSON.stringify(it))})' style="cursor:pointer">
+    <div><b>${label}</b> · ${it.place} · ${it.owner}</div>
+    <div class="muted">${fmtTime(it.start,it.end)}</div>
+  </div>`;
+}
+
+function render(){
+  const items = filterItems();
+  renderFilters(DATA.items.filter(i=>i.program===state.program && i.date===state.date));
+  renderTimeline(items);
+  renderSide(items);
+}
+
+/* =========================
+   6) 현재시각선
+   ========================= */
+function getNowMin(){
+  const d = new Date(); // 실제 운영에서는 타임존 보정 가능
+  return d.getHours()*60 + d.getMinutes();
+}
+function nowInRange(s,e){const n=getNowMin(); return s<=n && n<=e;}
+function updateNowLine(){
+  const n = getNowMin(), start=DATA.meta.startHour*60, end=DATA.meta.endHour*60;
+  const show = (n>=start && n<=end);
+  $$("#grid [data-now]").forEach(el=>{
+    el.style.display = show ? "block":"none";
+    if(show) el.style.left = pct(n)+"%";
+  });
+}
+
+/* =========================
+   7) 모달
+   ========================= */
+function openModal(json){
+  const it = JSON.parse(json);
+  $("#m_id").textContent = it.id;
+  $("#m_title").textContent = it.title || "(제목 없음)";
+  $("#m_date").textContent = it.date;
+  $("#m_time").textContent = fmtTime(it.start,it.end);
+  $("#m_place").textContent = it.place;
+  $("#m_company").textContent = it.company || "-";
+  $("#m_owner").textContent = `${it.owner} (${it.channel||"-"})`;
+  $("#m_items").textContent = it.items || "-";
+  $("#m_role").textContent = it.role || "-";
+  $("#m_remarks").textContent = it.remarks || "-";
+  $("#m_contact").innerHTML = `<a class="tel" href="tel:${it.phone||""}">${it.phone||"-"}</a>`;
+  $("#backdrop").classList.add("show");
+}
+function closeModal(){ $("#backdrop").classList.remove("show") }
+
+/* start */
+init();
+</script>
+</body>
+</html>
