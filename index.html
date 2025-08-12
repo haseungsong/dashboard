@@ -63,28 +63,45 @@
   .tooltip .t-sub{color:var(--muted); font-size:12px; margin-bottom:6px}
   .tooltip .t-row{display:flex; gap:6px; margin:2px 0}
   .tooltip .t-key{width:48px; color:var(--muted)}
+
+  /* ===== sticky header (탭 + 컨트롤) ===== */
+  .sticky-top{
+    position: sticky; top: 0; z-index: 100;
+    background: var(--bg);
+    padding-top: 4px; padding-bottom: 8px;
+  }
+  .sticky-top .card.controls{ margin-top:8px }
+  /* 살짝 분리감 */
+  .sticky-top::after{
+    content:""; display:block; height:8px; margin-top:8px;
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="row" style="align-items:flex-end;justify-content:space-between">
-    <div>
-      <div class="muted">KdKOO 현장 운영판</div>
-      <h1>장소·시간·R&R 타임라인</h1>
-      <div class="legend">
-        <span class="chip">검정=예약됨</span><span class="chip">하늘색=진행중</span><span class="chip">빨간선=현재시각</span>
-      </div>
-    </div>
-    <div class="tabs" id="programTabs"></div>
-  </div>
 
-  <div class="card controls">
-    <input id="q" placeholder="검색 (장소/담당/이벤트/회사/날짜/시간)">
-    <select id="place"></select>
-    <select id="owner"></select>
-    <select id="company"></select>
-    <input id="date" type="date">
+  <!-- 🔒 sticky wrapper: 위 두 블록을 감싸 상단 고정 -->
+  <div class="sticky-top">
+    <div class="row" style="align-items:flex-end;justify-content:space-between">
+      <div>
+        <div class="muted">KdKOO 현장 운영판</div>
+        <h1>장소·시간·R&R 타임라인</h1>
+        <div class="legend">
+          <span class="chip">검정=예약됨</span><span class="chip">하늘색=진행중</span><span class="chip">빨간선=현재시각</span>
+        </div>
+      </div>
+      <div class="tabs" id="programTabs"></div>
+    </div>
+
+    <div class="card controls">
+      <input id="q" placeholder="검색 (장소/담당/이벤트/회사/날짜/시간)">
+      <select id="place"></select>
+      <select id="owner"></select>
+      <select id="company"></select>
+      <input id="date" type="date">
+    </div>
   </div>
+  <!-- /sticky-top -->
 
   <div class="row" style="margin-top:10px">
     <div class="card" style="flex:1 1 740px">
