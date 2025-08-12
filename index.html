@@ -30,7 +30,7 @@
   .ticks{position:absolute;inset:0;pointer-events:none; z-index:0;}   /* 격자선은 뒤 */
   .ticks div{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
   .ticks label{position:absolute;top:6px;transform:translateX(-50%);font-size:11px;color:var(--muted);background:#fff;padding:0 4px}
-  .bars{position:relative; z-index:1; padding:40px 0 26px;}            /* ⬅️ 시간 라벨 아래에서 시작 */
+  .bars{position:relative; z-index:1; padding:48px 0 26px;}            /* ⬅️ 시간 라벨 아래에서 시작 */
   .bar{position:absolute;height:28px;border-radius:7px;color:#fff;background:#111827;display:flex;align-items:center;gap:6px;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid #0b1220}
   .bar.live{background:var(--barLive);border-color:#056081}
   .bar small{opacity:.9}
@@ -80,6 +80,9 @@
 
   /* 모달 열릴 때 본문 스크롤 잠금 */
   body.modal-open{ overflow:hidden; }
+
+  .timeline > .bars{ padding-top:40px !important; z-index:1; }
+  .timeline > .ticks{ z-index:0; }
 </style>
 </head>
 <body>
