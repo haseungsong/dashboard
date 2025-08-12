@@ -25,30 +25,24 @@
   .grid{display:grid;grid-template-columns:140px 1fr;gap:8px}
   .lane-head{padding:8px 10px;border-radius:10px;background:#fff;border:1px solid var(--line);font-weight:700}
 
-  /* ── 타임라인(레이어/여백 조정) ─────────────────────────── */
+  /* ── 타임라인(여백/레이어) ─────────────────────────── */
   .timeline{
     position:relative;
     border:1px solid var(--line);
     border-radius:10px;
     background:#fff;
     overflow:hidden;
-    /* ✅ 시간 라벨 높이만큼 실제 여백을 timeline에 부여 */
-    padding-top:48px;
+    padding-top:40px; /* 시간 라벨 높이만큼 실제 여백 */
   }
-  .ticks{position:absolute;inset:0;pointer-events:none; z-index:0;}   /* 격자선은 뒤 */
+  .ticks{position:absolute;inset:0;pointer-events:none; z-index:0;}
   .ticks div{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
   .ticks label{position:absolute;top:6px;transform:translateX(-50%);font-size:11px;color:var(--muted);background:#fff;padding:0 4px}
-
-  /* ✅ 막대 컨테이너는 상단 패딩 제거 (여백은 timeline이 담당) */
-  .bars{position:relative; z-index:1; padding:0 0 26px;}
-
+  .bars{position:relative; z-index:1; padding:0 0 26px;} /* 막대는 시간 아래에서 시작 */
   .bar{position:absolute;height:28px;border-radius:7px;color:#fff;background:#111827;display:flex;align-items:center;gap:6px;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid #0b1220}
   .bar.live{background:var(--barLive);border-color:#056081}
   .bar small{opacity:.9}
   .bar:focus{outline:2px solid var(--accent);outline-offset:1px}
-
-  /* 현재시각선 최상단 */
-  .now{position:absolute;top:0;bottom:0;width:2px;background:#ef4444; z-index:2;}
+  .now{position:absolute;top:0;bottom:0;width:2px;background:#ef4444; z-index:2;} /* 현재시각선 최상단 */
 
   .legend{display:flex;gap:8px;flex-wrap:wrap; user-select:none}
   .chip{background:#f1f5f9;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:12px}
@@ -70,7 +64,7 @@
   a.tel{color:#111827;text-decoration:underline}
   @media (max-width:900px){.controls{grid-template-columns:1fr 1fr 1fr 1fr;}.hide-m{display:none}}
 
-  /* ===== floating tooltip ===== */
+  /* tooltip */
   .tooltip {
     position: fixed; z-index: 9999; pointer-events: none;
     background:#fff; border:1px solid var(--line); border-radius:12px;
@@ -82,23 +76,17 @@
   .tooltip .t-row{display:flex; gap:6px; margin:2px 0}
   .tooltip .t-key{width:48px; color:var(--muted)}
 
-  /* ===== sticky header (탭 + 컨트롤) ===== */
-  .sticky-top{
-    position: sticky; top: 0; z-index: 100;
-    background: var(--bg);
-    padding-top: 4px; padding-bottom: 8px;
-  }
+  /* sticky header */
+  .sticky-top{ position: sticky; top: 0; z-index: 100; background: var(--bg); padding-top: 4px; padding-bottom: 8px; }
   .sticky-top .card.controls{ margin-top:8px }
-  .sticky-top::after{ content:""; display:block; height:0; margin-top:0; } /* 분리선 제거 */
-
-  /* 모달 열릴 때 본문 스크롤 잠금 */
+  .sticky-top::after{ content:""; display:block; height:0; margin-top:0; }
   body.modal-open{ overflow:hidden; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <!-- 🔒 sticky wrapper -->
+  <!-- 상단: 제목/탭/컨트롤 -->
   <div class="sticky-top">
     <div class="row" style="align-items:flex-end;justify-content:space-between">
       <div>
@@ -119,8 +107,8 @@
       <input id="date" type="date">
     </div>
   </div>
-  <!-- /sticky-top -->
 
+  <!-- 본문: 타임라인 + 사이드 -->
   <div class="row" style="margin-top:10px">
     <div class="card" style="flex:1 1 740px">
       <div class="grid" id="grid"></div>
@@ -174,7 +162,7 @@
 
 <script>
 /* =========================
-   0) 전역 데이터 (메타만 고정)
+   0) 전역 데이터
    ========================= */
 const DATA = {
   meta:{startHour:0,endHour:24},   // 00~24시 고정
@@ -187,19 +175,13 @@ const DATA = {
    ========================= */
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
+const KO = 'ko-KR';
 
-function toMin(hhmm){
-  const [h,m]=String(hhmm||"").split(":").map(Number);
-  return (isNaN(h)||isNaN(m))?0:h*60+m;
-}
-function pct(min){
-  const start=DATA.meta.startHour*60, end=DATA.meta.endHour*60;
-  return ((min-start)/(end-start))*100;
-}
+function toMin(hhmm){ const [h,m]=String(hhmm||"").split(":").map(Number); return (isNaN(h)||isNaN(m))?0:h*60+m; }
+function pct(min){ const start=DATA.meta.startHour*60, end=DATA.meta.endHour*60; return ((min-start)/(end-start))*100; }
 function fmtTime(a,b){return `${a}${b?`–${b}`:""}`}
 function uniq(arr, key){return [...new Set(arr.map(o=>o[key]))]}
 function norm(s){return String(s||"").trim();}
-const KO = 'ko-KR';
 
 /* "09:00 ~ 11:00" → {start,end} */
 function parseTimeRange(str){
@@ -211,16 +193,9 @@ function parseTimeRange(str){
   return {start, end};
 }
 
-/* ===== Tooltip helpers ===== */
+/* ===== Tooltip ===== */
 let TIP = null;
-function ensureTip(){
-  if(!TIP){
-    TIP = document.createElement('div');
-    TIP.className = 'tooltip';
-    TIP.style.display = 'none';
-    document.body.appendChild(TIP);
-  }
-}
+function ensureTip(){ if(!TIP){ TIP = document.createElement('div'); TIP.className = 'tooltip'; TIP.style.display = 'none'; document.body.appendChild(TIP); } }
 function tipHTML(it){
   return `
     <div class="t-h">${it.title || '(제목 없음)'}</div>
@@ -231,30 +206,15 @@ function tipHTML(it){
     ${it.remarks?`<div class="t-row"><div class="t-key">비고</div><div>${it.remarks}</div></div>`:''}
   `;
 }
-function showTip(e, it){
-  ensureTip();
-  TIP.innerHTML = tipHTML(it);
-  TIP.style.display = 'block';
-  moveTip(e);
-}
-function moveTip(e){
-  if(!TIP) return;
-  const pad = 14;
-  const vw = window.innerWidth, vh = window.innerHeight;
-  const rect = TIP.getBoundingClientRect();
-  let x = e.clientX + pad, y = e.clientY + pad;
-  if(x + rect.width + 8 > vw) x = e.clientX - rect.width - pad;
-  if(y + rect.height + 8 > vh) y = e.clientY - rect.height - pad;
-  TIP.style.left = x + 'px';
-  TIP.style.top  = y + 'px';
-}
+function showTip(e, it){ ensureTip(); TIP.innerHTML = tipHTML(it); TIP.style.display = 'block'; moveTip(e); }
+function moveTip(e){ if(!TIP) return; const pad = 14; const vw = innerWidth, vh = innerHeight; const rect = TIP.getBoundingClientRect(); let x = e.clientX + pad, y = e.clientY + pad; if(x + rect.width + 8 > vw) x = e.clientX - rect.width - pad; if(y + rect.height + 8 > vh) y = e.clientY - rect.height - pad; TIP.style.left = x + 'px'; TIP.style.top  = y + 'px'; }
 function hideTip(){ if(TIP) TIP.style.display = 'none'; }
 
 /* =========================
    2) 상태
    ========================= */
 let state = {
-  program:"",
+  program:"ALL",
   date:"",
   q:"",
   place:"ALL",
@@ -273,7 +233,7 @@ async function loadCSVFromUrl(url) {
   return parsed.data;
 }
 
-/* CSV 컬럼: Date, Day, Type, Name, Place, Time, Item, Role, Remarks */
+/* CSV → 내부 아이템 */
 function rowsToItems(rows){
   return rows.map((r, idx)=>{
     const type = norm(r.Type) || "Program";
@@ -299,14 +259,13 @@ function rowsToItems(rows){
 function applyItems(items){
   DATA.items = items;
 
+  // 전체 프로그램 목록(ALL 탭 표시용)
   const progIds = [];
   items.forEach(i=>{ if(!progIds.includes(i.program)) progIds.push(i.program); });
   progIds.sort((a,b)=>String(a).localeCompare(String(b), KO));
   DATA.programs = progIds.map(id => ({ id, name:id }));
 
-  state.program = DATA.programs[0]?.id || "ALL";
   state.date = items[0]?.date || new Date().toISOString().slice(0,10);
-
   init();
 }
 
@@ -326,32 +285,46 @@ function applyItems(items){
 })();
 
 /* =========================
-   4) UI 초기화
+   4) 날짜/Type 상호 보정 유틸
    ========================= */
 function datesForProgram(prog){
-  const src = DATA.items.filter(x => prog==='ALL' ? true : x.program===prog);
+  const src = DATA.items.filter(x => x.program===prog);
   return uniq(src, "date").sort((a,b)=>String(a).localeCompare(String(b), KO));
 }
+function programsForDate(date){
+  const src = DATA.items.filter(x => x.date===date);
+  return uniq(src, "program").sort((a,b)=>String(a).localeCompare(String(b), KO));
+}
+function ensureProgramFitsDate(){
+  if(state.program==='ALL') return;
+  const avail = programsForDate(state.date);
+  if(!avail.includes(state.program)){
+    state.program = avail[0] || 'ALL';
+  }
+}
 
+/* =========================
+   5) UI 초기화
+   ========================= */
 function init(){
-  // 프로그램 탭 (Type 값 + 오른쪽 끝 ALL)
-  const tabHtml =
-    DATA.programs.map(p=>`<button class="tab ${p.id===state.program?"active":""}" data-id="${p.id}">${p.name}</button>`).join('') +
-    `<button class="tab ${state.program==='ALL'?"active":""}" data-id="ALL">ALL</button>`;
-  $("#programTabs").innerHTML = tabHtml;
-
+  // 탭 클릭
   $("#programTabs").addEventListener("click", e=>{
     const id = e.target.dataset.id; if(!id) return;
     state.program=id;
-    $$("#programTabs .tab").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
-    const dates = datesForProgram(state.program);
-    if(!dates.includes(state.date)) state.date = dates[0] || state.date;
+    if(id!=="ALL"){
+      const dates = datesForProgram(id);
+      if(!dates.includes(state.date)) state.date = dates[0] || state.date;
+    }
     render();
   });
 
   // 날짜/검색
   if(state.date) $("#date").value = state.date;
-  $("#date").addEventListener("change", e=>{ state.date=e.target.value; render() });
+  $("#date").addEventListener("change", e=>{
+    state.date=e.target.value;
+    ensureProgramFitsDate(); // 날짜에 없는 Type이면 보정
+    render();
+  });
   $("#q").addEventListener("input", e=>{ state.q=e.target.value.trim().toLowerCase(); render() });
 
   render();
@@ -359,13 +332,27 @@ function init(){
 }
 
 /* =========================
-   5) 렌더
+   6) 렌더(탭/필터/타임라인/사이드)
    ========================= */
+function renderTabs(){
+  // ALL: 전체 Type, 그 외: 해당 날짜의 Type만
+  const list = (state.program==='ALL') ? DATA.programs.map(p=>p.id) : programsForDate(state.date);
+  const html =
+    list.map(id=>`<button class="tab ${id===state.program?"active":""}" data-id="${id}">${id}</button>`).join('') +
+    `<button class="tab ${state.program==='ALL'?"active":""}" data-id="ALL">ALL</button>`;
+  $("#programTabs").innerHTML = html;
+}
+
 function filterItems(){
-  const pool = DATA.items.filter(it => it.date===state.date && (state.program==='ALL' || it.program===state.program));
+  // 범위: ALL이면 날짜도 ALL(전 기간), 아니면 선택 날짜 + 선택 Type
+  const inScope = DATA.items.filter(it=>{
+    const matchDate = (state.program==='ALL') ? true : (it.date===state.date);
+    const matchProg = (state.program==='ALL') ? true : (it.program===state.program);
+    return matchDate && matchProg;
+  });
 
   const q = (state.q || "").toLowerCase();
-  return pool.filter(it=>{
+  return inScope.filter(it=>{
     const text = [
       it.place, it.owner, it.title, it.company || "",
       it.role, it.items, it.remarks || "",
@@ -375,15 +362,15 @@ function filterItems(){
     const okQ = !q || text.includes(q);
     const okP = state.place==="ALL" || it.place===state.place;
     const okO = state.owner==="ALL" || it.owner===state.owner;
-    const okC = state.company==="ALL" || (it.company||"")===it.company;
+    const okC = state.company==="ALL" || (it.company||"-")===state.company; // ✅ fix
     return okQ && okP && okO && okC;
   });
 }
 
-function renderFilters(allBaseItems){
-  const placesRaw = uniq(allBaseItems,"place").sort((a,b)=>String(a).localeCompare(String(b), KO));
-  const ownersRaw = uniq(allBaseItems,"owner").sort((a,b)=>String(a).localeCompare(String(b), KO));
-  const compsRaw  = uniq(allBaseItems.map(x=>({company:x.company||"-"})),"company").map(o=>o.company)
+function renderFilters(baseScope){
+  const placesRaw = uniq(baseScope,"place").sort((a,b)=>String(a).localeCompare(String(b), KO));
+  const ownersRaw = uniq(baseScope,"owner").sort((a,b)=>String(a).localeCompare(String(b), KO));
+  const compsRaw  = uniq(baseScope.map(x=>({company:x.company||"-"})),"company").map(o=>o.company)
                    .sort((a,b)=>String(a).localeCompare(String(b), KO));
 
   const places = ["ALL", ...placesRaw];
@@ -412,7 +399,6 @@ function renderTimeline(items){
       <div class="now" data-now style="display:none"></div>
     </div>
   `).join('');
-  
   grid.innerHTML = headHTML;
 
   function buildTicks(el){
@@ -423,7 +409,6 @@ function renderTimeline(items){
     }
     el.innerHTML = html;
   }
-
   $$("#grid [data-ticks]").forEach(buildTicks);
 
   places.forEach((place, idx)=>{
@@ -512,16 +497,24 @@ function rowNowNext(it,label){
 }
 
 function render(){
-  const base = DATA.items.filter(i => i.date===state.date && (state.program==='ALL' || i.program===state.program));
-  const items = filterItems();
+  // 탭 렌더 (날짜/ALL 상태 반영)
+  renderTabs();
 
-  renderFilters(base);
+  // 드롭다운 생성을 위한 베이스 범위
+  const baseScope = (state.program==='ALL') ? DATA.items : DATA.items.filter(i=>i.date===state.date);
+  renderFilters(baseScope);
+
+  // 본 컨텐츠
+  const items = filterItems();
   renderTimeline(items);
   renderSide(items);
+
+  // date input 표시 유지
+  if($("#date").value !== state.date) $("#date").value = state.date;
 }
 
 /* =========================
-   6) 현재시각선
+   7) 현재시각선
    ========================= */
 function getNowMin(){
   const d = new Date();
@@ -538,7 +531,7 @@ function updateNowLine(){
 }
 
 /* =========================
-   7) 모달
+   8) 모달
    ========================= */
 function openModal(json){
   const it = JSON.parse(json);
@@ -564,4 +557,3 @@ function closeModal(){
 </script>
 </body>
 </html>
-
