@@ -18,7 +18,7 @@
   .muted{color:var(--muted)}
   .controls select,.controls input{height:36px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:#fff}
   .controls{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:8px}
-  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0; user-select:none}
   .tab{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer;transition:background .15s,border-color .15s}
   .tab:hover{background:#f8fafc}
   .tab.active{background:#111827;color:#fff;border-color:#111827}
@@ -34,7 +34,7 @@
   .bar small{opacity:.9}
   .bar:focus{outline:2px solid var(--accent);outline-offset:1px}
   .now{position:absolute;top:0;bottom:0;width:2px;background:#ef4444}
-  .legend{display:flex;gap:8px;flex-wrap:wrap}
+  .legend{display:flex;gap:8px;flex-wrap:wrap; user-select:none}
   .chip{background:#f1f5f9;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:12px}
   .side{flex:1 1 320px}
   .side .sec h3{margin:0 0 6px;font-size:15px}
@@ -42,7 +42,9 @@
   .list .item{padding:8px;border:1px solid var(--line);border-radius:10px;background:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px}
   .btn{border:1px solid var(--line);background:#fff;border-radius:10px;height:34px;padding:0 10px;cursor:pointer}
   .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10}
+
+  /* modal */
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000} /* ↑ z-index 상향 */
   .backdrop.show{display:flex}
   .modal{background:#fff;border-radius:14px;border:1px solid var(--line);max-width:640px;width:92vw;padding:14px}
   .modal h2{margin:0 0 8px}
@@ -71,16 +73,17 @@
     padding-top: 4px; padding-bottom: 8px;
   }
   .sticky-top .card.controls{ margin-top:8px }
-  /* 살짝 분리감 */
-  .sticky-top::after{
-    content:""; display:block; height:8px; margin-top:8px;
-  }
+  /* ⛔️ 요청: 아래 분리선(회색 띠) 제거 */
+  .sticky-top::after{ content:""; display:block; height:0; margin-top:0; } /* ← 8px → 0 */
+
+  /* 모달 열릴 때 본문 스크롤 잠금 */
+  body.modal-open{ overflow:hidden; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <!-- 🔒 sticky wrapper: 위 두 블록을 감싸 상단 고정 -->
+  <!-- 🔒 sticky wrapper -->
   <div class="sticky-top">
     <div class="row" style="align-items:flex-end;justify-content:space-between">
       <div>
@@ -159,10 +162,9 @@
    0) 전역 데이터 (메타만 고정)
    ========================= */
 const DATA = {
-  // ✅ 항상 00~24시로 고정
-  meta:{startHour:0,endHour:24},
-  programs:[], // CSV Type으로 채움
-  items:[]     // CSV로 채움
+  meta:{startHour:0,endHour:24},   // 00~24시 고정
+  programs:[],
+  items:[]
 };
 
 /* =========================
@@ -231,16 +233,14 @@ function moveTip(e){
   TIP.style.left = x + 'px';
   TIP.style.top  = y + 'px';
 }
-function hideTip(){
-  if(TIP) TIP.style.display = 'none';
-}
+function hideTip(){ if(TIP) TIP.style.display = 'none'; }
 
 /* =========================
    2) 상태
    ========================= */
 let state = {
-  program:"", // CSV 로드 후 세팅 (Type 또는 'ALL')
-  date:"",    // CSV 로드 후 세팅 (첫 날짜)
+  program:"",
+  date:"",
   q:"",
   place:"ALL",
   owner:"ALL",
@@ -264,18 +264,18 @@ function rowsToItems(rows){
     const type = norm(r.Type) || "Program";
     const {start,end} = parseTimeRange(r.Time);
     return {
-      program: type,                 // 탭 기준 (예: "미팅", "점심"…)
+      program: type,
       id: `ROW-${idx+1}`,
       date: norm(r.Date),
-      company: "",                   // CSV에 없으므로 공란
+      company: "",
       owner: norm(r.Name),
       place: norm(r.Place),
       start, end,
-      title: norm(r.Role),           // 막대 라벨
+      title: norm(r.Role),
       items: norm(r.Item),
       role: norm(r.Role),
       remarks: norm(r.Remarks),
-      phone: "",                     // CSV에 없으므로 공란
+      phone: "",
       channel: ""
     }
   }).filter(x => x.date && x.place && x.start);
@@ -284,13 +284,11 @@ function rowsToItems(rows){
 function applyItems(items){
   DATA.items = items;
 
-  // Type(=program) 목록 (ko-KR 정렬)
   const progIds = [];
   items.forEach(i=>{ if(!progIds.includes(i.program)) progIds.push(i.program); });
   progIds.sort((a,b)=>String(a).localeCompare(String(b), KO));
   DATA.programs = progIds.map(id => ({ id, name:id }));
 
-  // 기본 program/date 세팅 (CSV 첫 행 기준)
   state.program = DATA.programs[0]?.id || "ALL";
   state.date = items[0]?.date || new Date().toISOString().slice(0,10);
 
@@ -300,12 +298,11 @@ function applyItems(items){
 /* 시작 */
 (async function bootstrap(){
   try{
-    const rows = await loadCSVFromUrl('DB.csv'); // 같은 폴더에 DB.csv
+    const rows = await loadCSVFromUrl('DB.csv');
     const items = rowsToItems(rows);
     applyItems(items);
   }catch(e){
     console.warn('DB.csv 로드 실패:', e);
-    // 비상 초기화(빈 상태)
     DATA.programs = [];
     state.program = "ALL";
     state.date = new Date().toISOString().slice(0,10);
@@ -332,7 +329,6 @@ function init(){
     const id = e.target.dataset.id; if(!id) return;
     state.program=id;
     $$("#programTabs .tab").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
-    // 탭 변경 시: 해당 탭(program)이 가진 날짜에 현재 date가 없으면 첫 날짜로 보정
     const dates = datesForProgram(state.program);
     if(!dates.includes(state.date)) state.date = dates[0] || state.date;
     render();
@@ -351,7 +347,6 @@ function init(){
    5) 렌더
    ========================= */
 function filterItems(){
-  // 🔑 program==='ALL' 이면 Type 필터를 해제하고, 선택 날짜만 적용
   const pool = DATA.items.filter(it => it.date===state.date && (state.program==='ALL' || it.program===state.program));
 
   const q = (state.q || "").toLowerCase();
@@ -371,7 +366,6 @@ function filterItems(){
 }
 
 function renderFilters(allBaseItems){
-  // ko-KR 기준 정렬 후 옵션 구성
   const placesRaw = uniq(allBaseItems,"place").sort((a,b)=>String(a).localeCompare(String(b), KO));
   const ownersRaw = uniq(allBaseItems,"owner").sort((a,b)=>String(a).localeCompare(String(b), KO));
   const compsRaw  = uniq(allBaseItems.map(x=>({company:x.company||"-"})),"company").map(o=>o.company)
@@ -392,7 +386,6 @@ function renderFilters(allBaseItems){
 
 function renderTimeline(items){
   const grid = $("#grid");
-  // 장소 정렬 ko-KR
   const places = uniq(items,"place").sort((a,b)=>String(a).localeCompare(String(b), KO));
   const startMin = DATA.meta.startHour*60, endMin = DATA.meta.endHour*60;
 
@@ -434,7 +427,7 @@ function renderTimeline(items){
       row.forEach(({s,e,item})=>{
         const left=pct(s), width=Math.max(0, pct(e)-pct(s));
         const live = nowInRange(s,e) ? " live" : "";
-        const itemJson = JSON.stringify(item).replace(/'/g,"&#39;"); // attr 안전화
+        const itemJson = JSON.stringify(item).replace(/'/g,"&#39;");
         html += `<div class="bar${live}" 
                   data-item='${itemJson}'
                   style="left:${left}%;width:${width}%;top:${rIdx*34}px"
@@ -447,7 +440,6 @@ function renderTimeline(items){
     bars.style.height = `${rows.length? rows.length*34+6 : 34}px`;
     bars.innerHTML = html;
 
-    // ===== 툴팁 바인딩 (막대)
     bars.querySelectorAll('.bar').forEach(el=>{
       const it = JSON.parse(el.dataset.item);
       el.addEventListener('mouseenter', (e)=> showTip(e, it));
@@ -472,7 +464,6 @@ function renderSide(items){
     ${!now.length && !next.length ? `<div class="item"><div class="muted">표시할 일정이 없습니다.</div></div>`:""}
   `;
 
-  // ===== 툴팁 바인딩 (Now & Next)
   $("#nowNext").querySelectorAll('.nn-item').forEach(el=>{
     const it = JSON.parse(el.dataset.item);
     el.addEventListener('mouseenter', (e)=> showTip(e, it));
@@ -506,7 +497,6 @@ function rowNowNext(it,label){
 }
 
 function render(){
-  // 필터 드롭다운 생성을 위한 베이스(현재 날짜 + program 적용, 단 program=ALL이면 날짜만)
   const base = DATA.items.filter(i => i.date===state.date && (state.program==='ALL' || i.program===state.program));
   const items = filterItems();
 
@@ -549,8 +539,13 @@ function openModal(json){
   $("#m_remarks").textContent = it.remarks || "-";
   $("#m_contact").innerHTML = it.phone && it.phone!=="-" ? `<a class="tel" href="tel:${it.phone}">${it.phone}</a>` : `<span class="muted">-</span>`;
   $("#backdrop").classList.add("show");
+  document.body.classList.add("modal-open");  // 스크롤 잠금
+  hideTip();
 }
-function closeModal(){ $("#backdrop").classList.remove("show") }
+function closeModal(){
+  $("#backdrop").classList.remove("show");
+  document.body.classList.remove("modal-open");
+}
 </script>
 </body>
 </html>
