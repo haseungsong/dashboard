@@ -8,6 +8,8 @@
   :root{
     --bg:#f6f7fb; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e5e7eb;
     --accent:#2563eb; --bar:#111827; --barLive:#0ea5e9; --tag:#eef2ff;
+    /* 시간 라벨 높이 여유(원하면 여기서만 조절) */
+    --tick-header-space: 38px; /* ← 막대를 이만큼 아래로 시작 */
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif}
@@ -25,15 +27,16 @@
   .grid{display:grid;grid-template-columns:140px 1fr;gap:8px}
   .lane-head{padding:8px 10px;border-radius:10px;background:#fff;border:1px solid var(--line);font-weight:700}
   .timeline{position:relative;border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden}
-  .ticks{position:absolute;inset:0;pointer-events:none}
+  /* 레이어 순서: bars < ticks < now */
+  .ticks{position:absolute;inset:0;pointer-events:none; z-index:3}
   .ticks div{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
   .ticks label{position:absolute;top:4px;transform:translateX(-50%);font-size:11px;color:var(--muted);background:#fff;padding:0 4px}
-  .bars{position:relative;padding:22px 0 26px}
-  .bar{position:absolute;height:28px;border-radius:7px;color:#fff;background:#111827;display:flex;align-items:center;gap:6px;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid #0b1220}
+  .bars{position:relative; padding:var(--tick-header-space) 0 26px; z-index:1} /* ⬅ 여기를 늘려 막대를 시간 아래로 */
+  .bar{position:absolute;height:28px;border-radius:7px;color:#fff;background:#111827;display:flex;align-items:center;gap:6px;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid #0b1220; z-index:1}
   .bar.live{background:var(--barLive);border-color:#056081}
   .bar small{opacity:.9}
   .bar:focus{outline:2px solid var(--accent);outline-offset:1px}
-  .now{position:absolute;top:0;bottom:0;width:2px;background:#ef4444}
+  .now{position:absolute;top:0;bottom:0;width:2px;background:#ef4444; z-index:4}
   .legend{display:flex;gap:8px;flex-wrap:wrap; user-select:none}
   .chip{background:#f1f5f9;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:12px}
   .side{flex:1 1 320px}
@@ -42,9 +45,7 @@
   .list .item{padding:8px;border:1px solid var(--line);border-radius:10px;background:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px}
   .btn{border:1px solid var(--line);background:#fff;border-radius:10px;height:34px;padding:0 10px;cursor:pointer}
   .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-
-  /* modal */
-  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000} /* ↑ z-index 상향 */
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10}
   .backdrop.show{display:flex}
   .modal{background:#fff;border-radius:14px;border:1px solid var(--line);max-width:640px;width:92vw;padding:14px}
   .modal h2{margin:0 0 8px}
@@ -73,17 +74,13 @@
     padding-top: 4px; padding-bottom: 8px;
   }
   .sticky-top .card.controls{ margin-top:8px }
-  /* ⛔️ 요청: 아래 분리선(회색 띠) 제거 */
-  .sticky-top::after{ content:""; display:block; height:0; margin-top:0; } /* ← 8px → 0 */
-
-  /* 모달 열릴 때 본문 스크롤 잠금 */
-  body.modal-open{ overflow:hidden; }
+  .sticky-top::after{ content:""; display:block; height:8px; margin-top:8px; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <!-- 🔒 sticky wrapper -->
+  <!-- sticky header -->
   <div class="sticky-top">
     <div class="row" style="align-items:flex-end;justify-content:space-between">
       <div>
@@ -104,7 +101,6 @@
       <input id="date" type="date">
     </div>
   </div>
-  <!-- /sticky-top -->
 
   <div class="row" style="margin-top:10px">
     <div class="card" style="flex:1 1 740px">
@@ -159,10 +155,10 @@
 
 <script>
 /* =========================
-   0) 전역 데이터 (메타만 고정)
+   0) 전역 데이터
    ========================= */
 const DATA = {
-  meta:{startHour:0,endHour:24},   // 00~24시 고정
+  meta:{startHour:0,endHour:24},  // 항상 00~24시
   programs:[],
   items:[]
 };
@@ -233,7 +229,9 @@ function moveTip(e){
   TIP.style.left = x + 'px';
   TIP.style.top  = y + 'px';
 }
-function hideTip(){ if(TIP) TIP.style.display = 'none'; }
+function hideTip(){
+  if(TIP) TIP.style.display = 'none';
+}
 
 /* =========================
    2) 상태
@@ -319,7 +317,6 @@ function datesForProgram(prog){
 }
 
 function init(){
-  // 프로그램 탭 (Type 값 + 오른쪽 끝 ALL)
   const tabHtml =
     DATA.programs.map(p=>`<button class="tab ${p.id===state.program?"active":""}" data-id="${p.id}">${p.name}</button>`).join('') +
     `<button class="tab ${state.program==='ALL'?"active":""}" data-id="ALL">ALL</button>`;
@@ -334,7 +331,6 @@ function init(){
     render();
   });
 
-  // 날짜/검색
   if(state.date) $("#date").value = state.date;
   $("#date").addEventListener("change", e=>{ state.date=e.target.value; render() });
   $("#q").addEventListener("input", e=>{ state.q=e.target.value.trim().toLowerCase(); render() });
@@ -348,7 +344,6 @@ function init(){
    ========================= */
 function filterItems(){
   const pool = DATA.items.filter(it => it.date===state.date && (state.program==='ALL' || it.program===state.program));
-
   const q = (state.q || "").toLowerCase();
   return pool.filter(it=>{
     const text = [
@@ -539,13 +534,8 @@ function openModal(json){
   $("#m_remarks").textContent = it.remarks || "-";
   $("#m_contact").innerHTML = it.phone && it.phone!=="-" ? `<a class="tel" href="tel:${it.phone}">${it.phone}</a>` : `<span class="muted">-</span>`;
   $("#backdrop").classList.add("show");
-  document.body.classList.add("modal-open");  // 스크롤 잠금
-  hideTip();
 }
-function closeModal(){
-  $("#backdrop").classList.remove("show");
-  document.body.classList.remove("modal-open");
-}
+function closeModal(){ $("#backdrop").classList.remove("show") }
 </script>
 </body>
 </html>
