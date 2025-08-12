@@ -17,7 +17,7 @@
   h1{margin:0 0 8px;font-size:22px;font-weight:800;letter-spacing:-.02em}
   .muted{color:var(--muted)}
   .controls select,.controls input{height:36px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:#fff}
-  .controls{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:8px}
+  .controls{display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr 1fr 1fr;gap:8px}
   .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}
   .tab{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer}
   .tab.active{background:#111827;color:#fff;border-color:#111827}
@@ -40,7 +40,6 @@
   .list .item{padding:8px;border:1px solid var(--line);border-radius:10px;background:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px}
   .btn{border:1px solid var(--line);background:#fff;border-radius:10px;height:34px;padding:0 10px;cursor:pointer}
   .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-  /* modal */
   .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10}
   .backdrop.show{display:flex}
   .modal{background:#fff;border-radius:14px;border:1px solid var(--line);max-width:640px;width:92vw;padding:14px}
@@ -71,6 +70,8 @@
     <select id="owner"></select>
     <select id="company"></select>
     <input id="date" type="date">
+    <!-- 현장 교체용 CSV 업로더 (선택) -->
+    <input id="csvFile" type="file" accept=".csv">
   </div>
 
   <div class="row" style="margin-top:10px">
@@ -121,88 +122,141 @@
   </div>
 </div>
 
+<!-- Papa Parse (CSV 파서) -->
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
 <script>
 /* =========================
-   1) 샘플 데이터 (여러 프로그램)
+   0) 전역 데이터(메타만 하드코딩)
    ========================= */
 const DATA = {
   meta:{startHour:8,endHour:22},
-  programs:[
-    { id:"P-1", name:"Main Schedule" },
-    { id:"P-2", name:"VIP Track" },
-    { id:"P-3", name:"Operations" }
-  ],
-  items:[
-    // ── Program 1
-    { program:"P-1", id:"A001", date:"2025-10-07", company:"kdKOO", owner:"MJ", place:"비즈니스 미팅", start:"09:00", end:"11:00",
-      title:"지법인 미팅룸 세팅 및 응대", items:"음료/스낵 세팅, 안내", role:"현장 응대·세팅", remarks:"",
-      phone:"+55-11-9000-0001", channel:"CH-1" },
-    { program:"P-1", id:"A002", date:"2025-10-07", company:"kdKOO", owner:"MJ", place:"Centre", start:"11:30", end:"14:00",
-      title:"Centre 예약 확인/자리 세팅", items:"예약 확인, 테이블 배치", role:"레스토랑 협조", remarks:"",
-      phone:"+55-11-9000-0001", channel:"CH-1" },
-    { program:"P-1", id:"A003", date:"2025-10-07", company:"kdKOO", owner:"SY", place:"비즈니스 미팅", start:"09:00", end:"12:00",
-      title:"미팅룸 세팅 및 응대", items:"음료/스낵, 게스트 케어", role:"현장 응대", remarks:"",
-      phone:"+55-11-9000-0002", channel:"CH-2" },
-    { program:"P-1", id:"A004", date:"2025-10-07", company:"kdKOO", owner:"SY", place:"리움 뮤지엄", start:"14:00", end:"18:00",
-      title:"투어 준비 및 안내", items:"디지털도슨트 리플렛", role:"투어 진행", remarks:"",
-      phone:"+55-11-9000-0002", channel:"CH-2" },
-    { program:"P-1", id:"A005", date:"2025-10-07", company:"kdKOO", owner:"JY", place:"비즈니스 미팅", start:"09:00", end:"12:00",
-      title:"미팅룸 세팅", items:"음료/스낵, 게스트", role:"현장", remarks:"",
-      phone:"+55-11-9000-0003", channel:"CH-2" },
-    { program:"P-1", id:"A006", date:"2025-10-07", company:"kdKOO", owner:"Tea", place:"비즈니스 미팅", start:"09:00", end:"12:00",
-      title:"세팅 및 응대", items:"음료/스낵", role:"현장", remarks:"",
-      phone:"+55-11-9000-0004", channel:"CH-1" },
-    { program:"P-1", id:"A007", date:"2025-10-07", company:"kdKOO", owner:"Jiwoo", place:"Line de Hannam", start:"12:00", end:"13:30",
-      title:"차량 정차 위치 안내", items:"대기/하차 안내", role:"동선 관리", remarks:"",
-      phone:"+55-11-9000-0005", channel:"CH-3" },
-    { program:"P-1", id:"A008", date:"2025-10-07", company:"kdKOO", owner:"TM 01", place:"삼성스토어", start:"15:00", end:"18:00",
-      title:"정차 위치 대기/하차 안내", items:"상암→호텔", role:"차량 동선", remarks:"",
-      phone:"+55-11-9000-0006", channel:"CH-3" },
-    { program:"P-1", id:"A009", date:"2025-10-07", company:"kdKOO", owner:"TM 02", place:"삼원가든", start:"20:00", end:"20:30",
-      title:"정차 위치 대기/하차 안내", items:"식당→호텔", role:"차량 동선", remarks:"",
-      phone:"+55-11-9000-0007", channel:"CH-3" },
-
-    // ── Program 2 (VIP)
-    { program:"P-2", id:"V101", date:"2025-10-07", company:"VIP", owner:"Host A", place:"VIP Lounge", start:"09:30", end:"11:30",
-      title:"VIP 리셉션", items:"웰컴/동선 브리핑", role:"리셉션", remarks:"",
-      phone:"+55-11-9100-0001", channel:"CH-5" },
-    { program:"P-2", id:"V102", date:"2025-10-07", company:"VIP", owner:"Host A", place:"Hall A", start:"13:00", end:"15:00",
-      title:"VIP 미팅", items:"통역/케이터링", role:"미팅 운영", remarks:"",
-      phone:"+55-11-9100-0001", channel:"CH-5" },
-
-    // ── Program 3 (Operations)
-    { program:"P-3", id:"O201", date:"2025-10-07", company:"Ops", owner:"장비", place:"Hall B", start:"08:30", end:"10:00",
-      title:"장비 점검", items:"프로젝터/마이크", role:"기술", remarks:"",
-      phone:"+55-11-9200-0001", channel:"CH-6" },
-    { program:"P-3", id:"O202", date:"2025-10-07", company:"Ops", owner:"안전", place:"Hall B", start:"10:00", end:"11:00",
-      title:"안전 라운드", items:"비상구/표지판", role:"안전", remarks:"",
-      phone:"+55-11-9200-0002", channel:"CH-6" },
-  ]
+  programs:[], // CSV에서 채움 (Type 고유값)
+  items:[]     // CSV에서 채움
 };
 
 /* =========================
-   2) 도우미
+   1) 도우미
    ========================= */
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 
-function toMin(hhmm){const [h,m]=hhmm.split(":").map(Number);return h*60+m}
-function pct(min){const start=DATA.meta.startHour*60, end=DATA.meta.endHour*60; return ( (min-start)/(end-start) )*100 }
+function toMin(hhmm){const [h,m]=String(hhmm).split(":").map(Number);return (isNaN(h)||isNaN(m))?0:h*60+m}
+function pct(min){const start=DATA.meta.startHour*60, end=DATA.meta.endHour*60; return ((min-start)/(end-start))*100 }
 function fmtTime(a,b){return `${a}${b?`–${b}`:""}`}
-
 function uniq(arr, key){return [...new Set(arr.map(o=>o[key]))]}
 
+/* Time: "09:00~11:00" → {start:"09:00", end:"11:00"} */
+function parseTimeRange(str){
+  if(!str) return {start:"", end:""};
+  const t = String(str).replace(/\s/g,"");
+  const [a,b] = t.split("~");
+  const start = a || "";
+  const end = b || a || "";
+  return {start, end};
+}
+
 /* =========================
-   3) 상태
+   2) 상태
    ========================= */
 let state = {
-  program:"P-1",
-  date:"2025-10-07",
+  program:"", // CSV 로드 후 세팅
+  date:"",    // CSV 로드 후 세팅
   q:"",
   place:"ALL",
   owner:"ALL",
   company:"ALL",
 };
+
+/* =========================
+   3) CSV 로드 & 매핑
+   ========================= */
+async function loadCSVFromUrl(url) {
+  const res = await fetch(url, {cache:"no-store"});
+  if(!res.ok) throw new Error("CSV fetch failed");
+  const text = await res.text();
+  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+  return parsed.data;
+}
+function loadCSVFromFile(file, cb) {
+  Papa.parse(file, { header:true, skipEmptyLines:true, complete: (res)=> cb(res.data) });
+}
+
+/* DB.csv 컬럼 매핑:
+   Date, Day, Type, Name, Place, Time, Item, Role, Remarks
+*/
+function rowsToItems(rows){
+  return rows.map((r, idx)=>{
+    const { start, end } = parseTimeRange(r.Time);
+    return {
+      program: (r.Type || "Program").trim(),  // 탭으로 사용
+      id: (r.id || `ROW-${idx+1}`).toString(),
+      date: (r.Date || "").trim(),
+      company: (r.company || "").trim(),     // 없으면 빈값
+      owner: (r.Name || "").trim(),
+      place: (r.Place || "").trim(),
+      start, end,
+      title: (r.Role || "").trim(),          // 바 라벨 제목
+      items: (r.Item || "").trim(),
+      role: (r.Role || "").trim(),
+      remarks: (r.Remarks || "").trim(),
+      phone: (r.phone || ""),                // 없으면 "-"
+      channel: (r.channel || "")
+    }
+  }).filter(x => x.date && x.place && x.start);
+}
+
+function applyItems(items){
+  DATA.items = items;
+
+  // 프로그램 탭 자동 구성 (Type 고유값)
+  const progIds = [...new Set(items.map(i=>i.program))];
+  DATA.programs = progIds.map(id => ({ id, name: id }));
+
+  // 기본 날짜/프로그램 세팅
+  state.program = progIds[0] || "";
+  state.date = items[0]?.date || "";
+
+  // UI 초기화/렌더
+  init();
+}
+
+/* 시작: ① DB.csv 자동 로드 + ② 업로드 핸들러 */
+async function bootstrap(){
+  try{
+    const rows = await loadCSVFromUrl('DB.csv'); // 같은 폴더
+    const items = rowsToItems(rows);
+    if(items.length){
+      applyItems(items);
+    }else{
+      console.warn('CSV가 비어있습니다.');
+      emptyInit();
+    }
+  }catch(e){
+    console.warn('DB.csv 로드 실패:', e);
+    emptyInit();
+  }
+
+  // 업로드로 즉시 교체
+  const fi = $("#csvFile");
+  if(fi){
+    fi.addEventListener('change', (e)=>{
+      const file = e.target.files?.[0]; if(!file) return;
+      loadCSVFromFile(file, (rows)=>{
+        const items = rowsToItems(rows);
+        if(items.length) applyItems(items);
+      });
+    });
+  }
+}
+
+function emptyInit(){
+  // CSV 없을 때도 UI가 깨지지 않도록 최소값 세팅
+  DATA.programs = [{id:"Program", name:"Program"}];
+  state.program = "Program";
+  state.date = new Date().toISOString().slice(0,10);
+  init();
+}
 
 /* =========================
    4) UI 초기화
@@ -217,14 +271,11 @@ function init(){
   });
 
   // 날짜/필터
-  $("#date").value = state.date;
+  if(state.date) $("#date").value = state.date;
   $("#date").addEventListener("change", e=>{ state.date=e.target.value; render() });
   $("#q").addEventListener("input", e=>{ state.q=e.target.value.trim().toLowerCase(); render() });
 
-  // 동적 옵션은 렌더 때마다 갱신
   render();
-
-  // 현재시각선 갱신
   setInterval(updateNowLine, 1000*30);
 }
 
@@ -234,19 +285,20 @@ function init(){
 function filterItems(){
   const items = DATA.items.filter(it => it.program===state.program && it.date===state.date);
   return items.filter(it=>{
-    const text = `${it.place} ${it.owner} ${it.title} ${it.company} ${it.role} ${it.items}`.toLowerCase();
+    const text = `${it.place} ${it.owner} ${it.title} ${it.company||""} ${it.role} ${it.items}`.toLowerCase();
     const okQ = !state.q || text.includes(state.q);
     const okP = state.place==="ALL" || it.place===state.place;
     const okO = state.owner==="ALL" || it.owner===state.owner;
-    const okC = state.company==="ALL" || it.company===state.company;
+    const okC = state.company==="ALL" || (it.company||"")===state.company;
     return okQ && okP && okO && okC;
   });
 }
 
-function renderFilters(items){
-  const places = ["ALL", ...uniq(items,"place")];
-  const owners = ["ALL", ...uniq(items,"owner")];
-  const comps  = ["ALL", ...uniq(items,"company")];
+function renderFilters(allProgramItems){
+  const places = ["ALL", ...uniq(allProgramItems,"place")];
+  const owners = ["ALL", ...uniq(allProgramItems,"owner")];
+  // company가 없을 수도 있으니 안전 처리
+  const comps  = ["ALL", ...uniq(allProgramItems.map(x=>({company:x.company||"-"})),"company").map(o=>o.company)];
   $("#place").innerHTML = places.map(v=>`<option ${state.place===v?"selected":""} value="${v}">${v}</option>`).join('');
   $("#owner").innerHTML = owners.map(v=>`<option ${state.owner===v?"selected":""} value="${v}">${v}</option>`).join('');
   $("#company").innerHTML= comps.map(v=>`<option ${state.company===v?"selected":""} value="${v}">${v}</option>`).join('');
@@ -260,7 +312,6 @@ function renderTimeline(items){
   const places = uniq(items,"place").sort((a,b)=>a.localeCompare(b));
   const startMin = DATA.meta.startHour*60, endMin = DATA.meta.endHour*60;
 
-  // header row: hour ticks
   const headHTML = places.map(p=>`
     <div class="lane-head">${p}</div>
     <div class="timeline">
@@ -274,7 +325,6 @@ function renderTimeline(items){
       <div class="ticks" id="topTicks"></div>
     </div>` + headHTML;
 
-  // ticks
   function buildTicks(el){
     let html=""; for(let m=startMin; m<=endMin; m+=60){
       const left=pct(m); html+=`<div style="left:${left}%;"></div><label style="left:${left}%;">${String(Math.floor(m/60)).padStart(2,"0")}:00</label>`;
@@ -284,26 +334,24 @@ function renderTimeline(items){
   buildTicks($("#topTicks"));
   $$("#grid [data-ticks]").forEach(buildTicks);
 
-  // bars
   places.forEach((place, idx)=>{
     const laneItems = items.filter(i=>i.place===place).sort((a,b)=>toMin(a.start)-toMin(b.start));
     const bars = grid.querySelectorAll("[data-bars]")[idx];
     let html="";
-    // stacking when overlapping
     const rows=[];
     laneItems.forEach(it=>{
       const s=toMin(it.start), e=toMin(it.end||it.start), bar={s,e,item:it};
-      let row=rows.find(r=>r[r.length-1].e<=s); // first row that ends before start
+      let row=rows.find(r=>r[r.length-1].e<=s);
       if(!row){row=[];rows.push(row)}
       row.push(bar);
     });
 
     rows.forEach((row, rIdx)=>{
       row.forEach(({s,e,item})=>{
-        const left=pct(s), width=pct(e)-pct(s);
+        const left=pct(s), width=Math.max(0, pct(e)-pct(s));
         const live = nowInRange(s,e) ? " live" : "";
         html += `<div class="bar${live}" style="left:${left}%;width:${width}%;top:${rIdx*34}px" onclick='openModal(${JSON.stringify(JSON.stringify(item))})'>
-          <b>${item.owner}</b> <small>${item.title}</small> <small class="muted">(${fmtTime(item.start,item.end)})</small>
+          <b>${item.owner}</b> <small>${item.title||""}</small> <small class="muted">(${fmtTime(item.start,item.end)})</small>
         </div>`;
       });
     });
@@ -317,9 +365,7 @@ function renderTimeline(items){
 
 function renderSide(items){
   const nowM = getNowMin();
-  const list = items
-    .map(it=>({...it, s:toMin(it.start), e:toMin(it.end||it.start)}))
-    .sort((a,b)=>a.s-b.s);
+  const list = items.map(it=>({...it, s:toMin(it.start), e:toMin(it.end||it.start)})).sort((a,b)=>a.s-b.s);
 
   const now = list.filter(it=>it.s<=nowM && nowM<=it.e);
   const next = list.filter(it=>it.s>nowM).slice(0,3);
@@ -330,16 +376,14 @@ function renderSide(items){
     ${!now.length && !next.length ? `<div class="item"><div class="muted">표시할 일정이 없습니다.</div></div>`:""}
   `;
 
-  // 연락
-  const contacts = uniq(items.map(it=>({owner:it.owner, phone:it.phone, channel:it.channel})),"owner")
-    .map(o=>o);
+  // 연락(전화/채널 없으면 -)
+  const contacts = uniq(items.map(it=>({owner:it.owner, phone:it.phone||"-", channel:it.channel||"-"})),"owner");
   $("#contacts").innerHTML = contacts.map(c=>`
     <div class="item">
-      <div><b>${c.owner}</b> <span class="muted">(${c.channel||"-"})</span></div>
-      <div><a class="tel" href="tel:${c.phone}">전화</a></div>
+      <div><b>${c.owner}</b> <span class="muted">(${c.channel})</span></div>
+      <div>${c.phone && c.phone!=="-" ? `<a class="tel" href="tel:${c.phone}">전화</a>` : `<span class="muted">-</span>`}</div>
     </div>`).join('') || `<div class="item"><div class="muted">담당자 없음</div></div>`;
 
-  // 요약
   $("#summary").innerHTML = `
     <div class="item"><div>총 일정</div><div><b>${items.length}</b></div></div>
     <div class="item"><div>장소 수</div><div><b>${uniq(items,"place").length}</b></div></div>
@@ -355,6 +399,7 @@ function rowNowNext(it,label){
 }
 
 function render(){
+  const itemsAllToday = DATA.items.filter(i=>i.program===state.program && i.date===state.date);
   const items = filterItems();
   renderFilters(DATA.items.filter(i=>i.program===state.program && i.date===state.date));
   renderTimeline(items);
@@ -365,7 +410,7 @@ function render(){
    6) 현재시각선
    ========================= */
 function getNowMin(){
-  const d = new Date(); // 실제 운영에서는 타임존 보정 가능
+  const d = new Date();
   return d.getHours()*60 + d.getMinutes();
 }
 function nowInRange(s,e){const n=getNowMin(); return s<=n && n<=e;}
@@ -383,23 +428,23 @@ function updateNowLine(){
    ========================= */
 function openModal(json){
   const it = JSON.parse(json);
-  $("#m_id").textContent = it.id;
+  $("#m_id").textContent = it.id || "";
   $("#m_title").textContent = it.title || "(제목 없음)";
-  $("#m_date").textContent = it.date;
+  $("#m_date").textContent = it.date || "";
   $("#m_time").textContent = fmtTime(it.start,it.end);
-  $("#m_place").textContent = it.place;
+  $("#m_place").textContent = it.place || "";
   $("#m_company").textContent = it.company || "-";
-  $("#m_owner").textContent = `${it.owner} (${it.channel||"-"})`;
+  $("#m_owner").textContent = `${it.owner||""} (${it.channel||"-"})`;
   $("#m_items").textContent = it.items || "-";
   $("#m_role").textContent = it.role || "-";
   $("#m_remarks").textContent = it.remarks || "-";
-  $("#m_contact").innerHTML = `<a class="tel" href="tel:${it.phone||""}">${it.phone||"-"}</a>`;
+  $("#m_contact").innerHTML = it.phone && it.phone!=="-" ? `<a class="tel" href="tel:${it.phone}">${it.phone}</a>` : `<span class="muted">-</span>`;
   $("#backdrop").classList.add("show");
 }
 function closeModal(){ $("#backdrop").classList.remove("show") }
 
 /* start */
-init();
+bootstrap();
 </script>
 </body>
 </html>
