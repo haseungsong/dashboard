@@ -142,7 +142,8 @@
    0) 전역 데이터 (메타만 고정)
    ========================= */
 const DATA = {
-  meta:{startHour:8,endHour:22},
+  // ✅ 항상 00~24시로 고정
+  meta:{startHour:0,endHour:24},
   programs:[], // CSV Type으로 채움
   items:[]     // CSV로 채움
 };
