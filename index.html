@@ -19,7 +19,8 @@
   .controls select,.controls input{height:36px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:#fff}
   .controls{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:8px}
   .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}
-  .tab{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer}
+  .tab{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer;transition:background .15s,border-color .15s}
+  .tab:hover{background:#f8fafc}
   .tab.active{background:#111827;color:#fff;border-color:#111827}
   .grid{display:grid;grid-template-columns:140px 1fr;gap:8px}
   .lane-head{padding:8px 10px;border-radius:10px;background:#fff;border:1px solid var(--line);font-weight:700}
@@ -31,6 +32,7 @@
   .bar{position:absolute;height:28px;border-radius:7px;color:#fff;background:#111827;display:flex;align-items:center;gap:6px;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid #0b1220}
   .bar.live{background:var(--barLive);border-color:#056081}
   .bar small{opacity:.9}
+  .bar:focus{outline:2px solid var(--accent);outline-offset:1px}
   .now{position:absolute;top:0;bottom:0;width:2px;background:#ef4444}
   .legend{display:flex;gap:8px;flex-wrap:wrap}
   .chip{background:#f1f5f9;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:12px}
@@ -49,6 +51,18 @@
   .tag{background:var(--tag);border:1px solid #c7d2fe;border-radius:999px;padding:2px 8px;font-size:12px}
   a.tel{color:#111827;text-decoration:underline}
   @media (max-width:900px){.controls{grid-template-columns:1fr 1fr 1fr 1fr;}.hide-m{display:none}}
+
+  /* ===== floating tooltip ===== */
+  .tooltip {
+    position: fixed; z-index: 9999; pointer-events: none;
+    background:#fff; border:1px solid var(--line); border-radius:12px;
+    padding:10px 12px; box-shadow: 0 8px 24px rgba(2,6,23,.12);
+    min-width: 220px; max-width: 360px; font-size:13px; line-height:1.35;
+  }
+  .tooltip .t-h{font-weight:700; margin-bottom:4px}
+  .tooltip .t-sub{color:var(--muted); font-size:12px; margin-bottom:6px}
+  .tooltip .t-row{display:flex; gap:6px; margin:2px 0}
+  .tooltip .t-key{width:48px; color:var(--muted)}
 </style>
 </head>
 <body>
@@ -150,6 +164,7 @@ function pct(min){
 function fmtTime(a,b){return `${a}${b?`–${b}`:""}`}
 function uniq(arr, key){return [...new Set(arr.map(o=>o[key]))]}
 function norm(s){return String(s||"").trim();}
+const KO = 'ko-KR';
 
 /* "09:00 ~ 11:00" → {start,end} */
 function parseTimeRange(str){
@@ -159,6 +174,47 @@ function parseTimeRange(str){
   const start = a || "";
   const end = b || a || "";
   return {start, end};
+}
+
+/* ===== Tooltip helpers ===== */
+let TIP = null;
+function ensureTip(){
+  if(!TIP){
+    TIP = document.createElement('div');
+    TIP.className = 'tooltip';
+    TIP.style.display = 'none';
+    document.body.appendChild(TIP);
+  }
+}
+function tipHTML(it){
+  return `
+    <div class="t-h">${it.title || '(제목 없음)'}</div>
+    <div class="t-sub">${it.program} · ${it.place}</div>
+    <div class="t-row"><div class="t-key">시간</div><div>${fmtTime(it.start,it.end)}</div></div>
+    <div class="t-row"><div class="t-key">담당</div><div>${it.owner}${it.channel?` (${it.channel})`:''}</div></div>
+    ${it.items?`<div class="t-row"><div class="t-key">Items</div><div>${it.items}</div></div>`:''}
+    ${it.remarks?`<div class="t-row"><div class="t-key">비고</div><div>${it.remarks}</div></div>`:''}
+  `;
+}
+function showTip(e, it){
+  ensureTip();
+  TIP.innerHTML = tipHTML(it);
+  TIP.style.display = 'block';
+  moveTip(e);
+}
+function moveTip(e){
+  if(!TIP) return;
+  const pad = 14;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const rect = TIP.getBoundingClientRect();
+  let x = e.clientX + pad, y = e.clientY + pad;
+  if(x + rect.width + 8 > vw) x = e.clientX - rect.width - pad;
+  if(y + rect.height + 8 > vh) y = e.clientY - rect.height - pad;
+  TIP.style.left = x + 'px';
+  TIP.style.top  = y + 'px';
+}
+function hideTip(){
+  if(TIP) TIP.style.display = 'none';
 }
 
 /* =========================
@@ -210,9 +266,10 @@ function rowsToItems(rows){
 function applyItems(items){
   DATA.items = items;
 
-  // Type(=program) 목록
+  // Type(=program) 목록 (ko-KR 정렬)
   const progIds = [];
   items.forEach(i=>{ if(!progIds.includes(i.program)) progIds.push(i.program); });
+  progIds.sort((a,b)=>String(a).localeCompare(String(b), KO));
   DATA.programs = progIds.map(id => ({ id, name:id }));
 
   // 기본 program/date 세팅 (CSV 첫 행 기준)
@@ -243,7 +300,7 @@ function applyItems(items){
    ========================= */
 function datesForProgram(prog){
   const src = DATA.items.filter(x => prog==='ALL' ? true : x.program===prog);
-  return uniq(src, "date");
+  return uniq(src, "date").sort((a,b)=>String(a).localeCompare(String(b), KO));
 }
 
 function init(){
@@ -296,12 +353,20 @@ function filterItems(){
 }
 
 function renderFilters(allBaseItems){
-  const places = ["ALL", ...uniq(allBaseItems,"place")];
-  const owners = ["ALL", ...uniq(allBaseItems,"owner")];
-  const comps  = ["ALL", ...uniq(allBaseItems.map(x=>({company:x.company||"-"})),"company").map(o=>o.company)];
+  // ko-KR 기준 정렬 후 옵션 구성
+  const placesRaw = uniq(allBaseItems,"place").sort((a,b)=>String(a).localeCompare(String(b), KO));
+  const ownersRaw = uniq(allBaseItems,"owner").sort((a,b)=>String(a).localeCompare(String(b), KO));
+  const compsRaw  = uniq(allBaseItems.map(x=>({company:x.company||"-"})),"company").map(o=>o.company)
+                   .sort((a,b)=>String(a).localeCompare(String(b), KO));
+
+  const places = ["ALL", ...placesRaw];
+  const owners = ["ALL", ...ownersRaw];
+  const comps  = ["ALL", ...compsRaw];
+
   $("#place").innerHTML = places.map(v=>`<option ${state.place===v?"selected":""} value="${v}">${v}</option>`).join('');
   $("#owner").innerHTML = owners.map(v=>`<option ${state.owner===v?"selected":""} value="${v}">${v}</option>`).join('');
   $("#company").innerHTML= comps.map(v=>`<option ${state.company===v?"selected":""} value="${v}">${v}</option>`).join('');
+
   $("#place").onchange = e=>{state.place=e.target.value; render()}
   $("#owner").onchange = e=>{state.owner=e.target.value; render()}
   $("#company").onchange = e=>{state.company=e.target.value; render()}
@@ -309,7 +374,8 @@ function renderFilters(allBaseItems){
 
 function renderTimeline(items){
   const grid = $("#grid");
-  const places = uniq(items,"place").sort((a,b)=>a.localeCompare(b));
+  // 장소 정렬 ko-KR
+  const places = uniq(items,"place").sort((a,b)=>String(a).localeCompare(String(b), KO));
   const startMin = DATA.meta.startHour*60, endMin = DATA.meta.endHour*60;
 
   const headHTML = places.map(p=>`
@@ -350,7 +416,11 @@ function renderTimeline(items){
       row.forEach(({s,e,item})=>{
         const left=pct(s), width=Math.max(0, pct(e)-pct(s));
         const live = nowInRange(s,e) ? " live" : "";
-        html += `<div class="bar${live}" style="left:${left}%;width:${width}%;top:${rIdx*34}px" onclick='openModal(${JSON.stringify(JSON.stringify(item))})'>
+        const itemJson = JSON.stringify(item).replace(/'/g,"&#39;"); // attr 안전화
+        html += `<div class="bar${live}" 
+                  data-item='${itemJson}'
+                  style="left:${left}%;width:${width}%;top:${rIdx*34}px"
+                  onclick='openModal(${JSON.stringify(JSON.stringify(item))})'>
           <b>${item.owner}</b> <small>${item.title||""}</small> <small class="muted">(${fmtTime(item.start,item.end)})</small>
         </div>`;
       });
@@ -358,6 +428,14 @@ function renderTimeline(items){
 
     bars.style.height = `${rows.length? rows.length*34+6 : 34}px`;
     bars.innerHTML = html;
+
+    // ===== 툴팁 바인딩 (막대)
+    bars.querySelectorAll('.bar').forEach(el=>{
+      const it = JSON.parse(el.dataset.item);
+      el.addEventListener('mouseenter', (e)=> showTip(e, it));
+      el.addEventListener('mousemove',  (e)=> moveTip(e));
+      el.addEventListener('mouseleave', hideTip);
+    });
   });
 
   updateNowLine();
@@ -376,6 +454,14 @@ function renderSide(items){
     ${!now.length && !next.length ? `<div class="item"><div class="muted">표시할 일정이 없습니다.</div></div>`:""}
   `;
 
+  // ===== 툴팁 바인딩 (Now & Next)
+  $("#nowNext").querySelectorAll('.nn-item').forEach(el=>{
+    const it = JSON.parse(el.dataset.item);
+    el.addEventListener('mouseenter', (e)=> showTip(e, it));
+    el.addEventListener('mousemove',  (e)=> moveTip(e));
+    el.addEventListener('mouseleave', hideTip);
+  });
+
   const contacts = uniq(items.map(it=>({owner:it.owner, phone:it.phone||"-", channel:it.channel||"-"})),"owner");
   $("#contacts").innerHTML = contacts.map(c=>`
     <div class="item">
@@ -391,7 +477,11 @@ function renderSide(items){
 }
 
 function rowNowNext(it,label){
-  return `<div class="item" onclick='openModal(${JSON.stringify(JSON.stringify(it))})' style="cursor:pointer">
+  const itemJson = JSON.stringify(it).replace(/'/g,"&#39;");
+  return `<div class="item nn-item" 
+              data-item='${itemJson}'
+              onclick='openModal(${JSON.stringify(JSON.stringify(it))})'
+              style="cursor:pointer">
     <div><b>${label}</b> · ${it.place} · ${it.owner}</div>
     <div class="muted">${fmtTime(it.start,it.end)}</div>
   </div>`;
