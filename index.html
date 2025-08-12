@@ -17,7 +17,7 @@
   h1{margin:0 0 8px;font-size:22px;font-weight:800;letter-spacing:-.02em}
   .muted{color:var(--muted)}
   .controls select,.controls input{height:36px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:#fff}
-  .controls{display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr 1fr 1fr;gap:8px}
+  .controls{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:8px}
   .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}
   .tab{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer}
   .tab.active{background:#111827;color:#fff;border-color:#111827}
@@ -65,13 +65,11 @@
   </div>
 
   <div class="card controls">
-    <input id="q" placeholder="검색 (장소/담당/이벤트/회사)">
+    <input id="q" placeholder="검색 (장소/담당/이벤트/회사/날짜/시간)">
     <select id="place"></select>
     <select id="owner"></select>
     <select id="company"></select>
     <input id="date" type="date">
-    <!-- 현장 교체용 CSV 업로더 (선택) -->
-    <input id="csvFile" type="file" accept=".csv">
   </div>
 
   <div class="row" style="margin-top:10px">
@@ -122,33 +120,40 @@
   </div>
 </div>
 
-<!-- Papa Parse (CSV 파서) -->
+<!-- Papa Parse -->
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <script>
 /* =========================
-   0) 전역 데이터(메타만 하드코딩)
+   0) 전역 데이터 (메타만 고정)
    ========================= */
 const DATA = {
   meta:{startHour:8,endHour:22},
-  programs:[], // CSV에서 채움 (Type 고유값)
-  items:[]     // CSV에서 채움
+  programs:[], // CSV Type으로 채움
+  items:[]     // CSV로 채움
 };
 
 /* =========================
-   1) 도우미
+   1) 유틸
    ========================= */
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 
-function toMin(hhmm){const [h,m]=String(hhmm).split(":").map(Number);return (isNaN(h)||isNaN(m))?0:h*60+m}
-function pct(min){const start=DATA.meta.startHour*60, end=DATA.meta.endHour*60; return ((min-start)/(end-start))*100 }
+function toMin(hhmm){
+  const [h,m]=String(hhmm||"").split(":").map(Number);
+  return (isNaN(h)||isNaN(m))?0:h*60+m;
+}
+function pct(min){
+  const start=DATA.meta.startHour*60, end=DATA.meta.endHour*60;
+  return ((min-start)/(end-start))*100;
+}
 function fmtTime(a,b){return `${a}${b?`–${b}`:""}`}
 function uniq(arr, key){return [...new Set(arr.map(o=>o[key]))]}
+function norm(s){return String(s||"").trim();}
 
-/* Time: "09:00~11:00" → {start:"09:00", end:"11:00"} */
+/* "09:00 ~ 11:00" → {start,end} */
 function parseTimeRange(str){
-  if(!str) return {start:"", end:""};
+  if(!str) return {start:"",end:""};
   const t = String(str).replace(/\s/g,"");
   const [a,b] = t.split("~");
   const start = a || "";
@@ -160,8 +165,8 @@ function parseTimeRange(str){
    2) 상태
    ========================= */
 let state = {
-  program:"", // CSV 로드 후 세팅
-  date:"",    // CSV 로드 후 세팅
+  program:"", // CSV 로드 후 세팅 (Type)
+  date:"",    // CSV 로드 후 세팅 (첫 날짜)
   q:"",
   place:"ALL",
   owner:"ALL",
@@ -178,30 +183,26 @@ async function loadCSVFromUrl(url) {
   const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
   return parsed.data;
 }
-function loadCSVFromFile(file, cb) {
-  Papa.parse(file, { header:true, skipEmptyLines:true, complete: (res)=> cb(res.data) });
-}
 
-/* DB.csv 컬럼 매핑:
-   Date, Day, Type, Name, Place, Time, Item, Role, Remarks
-*/
+/* CSV 컬럼: Date, Day, Type, Name, Place, Time, Item, Role, Remarks */
 function rowsToItems(rows){
   return rows.map((r, idx)=>{
-    const { start, end } = parseTimeRange(r.Time);
+    const type = norm(r.Type) || "Program";
+    const {start,end} = parseTimeRange(r.Time);
     return {
-      program: (r.Type || "Program").trim(),  // 탭으로 사용
-      id: (r.id || `ROW-${idx+1}`).toString(),
-      date: (r.Date || "").trim(),
-      company: (r.company || "").trim(),     // 없으면 빈값
-      owner: (r.Name || "").trim(),
-      place: (r.Place || "").trim(),
+      program: type,                 // 탭 기준 (예: "미팅")
+      id: `ROW-${idx+1}`,
+      date: norm(r.Date),
+      company: "",                   // CSV에 없으므로 공란
+      owner: norm(r.Name),
+      place: norm(r.Place),
       start, end,
-      title: (r.Role || "").trim(),          // 바 라벨 제목
-      items: (r.Item || "").trim(),
-      role: (r.Role || "").trim(),
-      remarks: (r.Remarks || "").trim(),
-      phone: (r.phone || ""),                // 없으면 "-"
-      channel: (r.channel || "")
+      title: norm(r.Role),           // 막대 라벨
+      items: norm(r.Item),
+      role: norm(r.Role),
+      remarks: norm(r.Remarks),
+      phone: "",                     // CSV에 없으므로 공란
+      channel: ""
     }
   }).filter(x => x.date && x.place && x.start);
 }
@@ -209,68 +210,52 @@ function rowsToItems(rows){
 function applyItems(items){
   DATA.items = items;
 
-  // 프로그램 탭 자동 구성 (Type 고유값)
-  const progIds = [...new Set(items.map(i=>i.program))];
-  DATA.programs = progIds.map(id => ({ id, name: id }));
+  // Type(=program)별 탭 생성 — CSV에 있는 그대로의 텍스트로
+  const progIds = [];
+  items.forEach(i=>{ if(!progIds.includes(i.program)) progIds.push(i.program); });
+  DATA.programs = progIds.map(id => ({ id, name:id }));
 
-  // 기본 날짜/프로그램 세팅
+  // 기본 program/date 세팅 (CSV 첫 행 기준)
   state.program = progIds[0] || "";
-  state.date = items[0]?.date || "";
+  state.date = items[0]?.date || new Date().toISOString().slice(0,10);
 
-  // UI 초기화/렌더
   init();
 }
 
-/* 시작: ① DB.csv 자동 로드 + ② 업로드 핸들러 */
-async function bootstrap(){
+/* 시작 */
+(async function bootstrap(){
   try{
-    const rows = await loadCSVFromUrl('DB.csv'); // 같은 폴더
+    const rows = await loadCSVFromUrl('DB.csv'); // 같은 폴더에 DB.csv
     const items = rowsToItems(rows);
-    if(items.length){
-      applyItems(items);
-    }else{
-      console.warn('CSV가 비어있습니다.');
-      emptyInit();
-    }
+    applyItems(items);
   }catch(e){
     console.warn('DB.csv 로드 실패:', e);
-    emptyInit();
+    // 비상 초기화(빈 상태)
+    DATA.programs = [{id:"Program",name:"Program"}];
+    state.program = "Program";
+    state.date = new Date().toISOString().slice(0,10);
+    init();
   }
-
-  // 업로드로 즉시 교체
-  const fi = $("#csvFile");
-  if(fi){
-    fi.addEventListener('change', (e)=>{
-      const file = e.target.files?.[0]; if(!file) return;
-      loadCSVFromFile(file, (rows)=>{
-        const items = rowsToItems(rows);
-        if(items.length) applyItems(items);
-      });
-    });
-  }
-}
-
-function emptyInit(){
-  // CSV 없을 때도 UI가 깨지지 않도록 최소값 세팅
-  DATA.programs = [{id:"Program", name:"Program"}];
-  state.program = "Program";
-  state.date = new Date().toISOString().slice(0,10);
-  init();
-}
-
+})();
+  
 /* =========================
    4) UI 초기화
    ========================= */
 function init(){
-  // 프로그램 탭
+  // 프로그램 탭 (Type 값 그대로)
   const tabs = DATA.programs.map(p=>`<button class="tab ${p.id===state.program?"active":""}" data-id="${p.id}">${p.name}</button>`).join('');
   $("#programTabs").innerHTML = tabs;
   $("#programTabs").addEventListener("click", e=>{
     const id = e.target.dataset.id; if(!id) return;
-    state.program=id; $$("#programTabs .tab").forEach(b=>b.classList.toggle("active",b.dataset.id===id)); render();
+    state.program=id;
+    $$("#programTabs .tab").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
+    // 탭 변경 시, 해당 program이 가진 날짜 중 현재 state.date가 없으면 첫 날짜로 보정
+    const dates = uniq(DATA.items.filter(x=>x.program===state.program),"date");
+    if(!dates.includes(state.date)) state.date = dates[0] || state.date;
+    render();
   });
 
-  // 날짜/필터
+  // 날짜/검색
   if(state.date) $("#date").value = state.date;
   $("#date").addEventListener("change", e=>{ state.date=e.target.value; render() });
   $("#q").addEventListener("input", e=>{ state.q=e.target.value.trim().toLowerCase(); render() });
@@ -284,9 +269,16 @@ function init(){
    ========================= */
 function filterItems(){
   const items = DATA.items.filter(it => it.program===state.program && it.date===state.date);
+
+  const q = (state.q || "").toLowerCase();
   return items.filter(it=>{
-    const text = `${it.place} ${it.owner} ${it.title} ${it.company||""} ${it.role} ${it.items}`.toLowerCase();
-    const okQ = !state.q || text.includes(state.q);
+    const text = [
+      it.place, it.owner, it.title, it.company || "",
+      it.role, it.items, it.remarks || "",
+      it.date, it.start, it.end
+    ].join(" ").toLowerCase();
+
+    const okQ = !q || text.includes(q);
     const okP = state.place==="ALL" || it.place===state.place;
     const okO = state.owner==="ALL" || it.owner===state.owner;
     const okC = state.company==="ALL" || (it.company||"")===state.company;
@@ -297,7 +289,6 @@ function filterItems(){
 function renderFilters(allProgramItems){
   const places = ["ALL", ...uniq(allProgramItems,"place")];
   const owners = ["ALL", ...uniq(allProgramItems,"owner")];
-  // company가 없을 수도 있으니 안전 처리
   const comps  = ["ALL", ...uniq(allProgramItems.map(x=>({company:x.company||"-"})),"company").map(o=>o.company)];
   $("#place").innerHTML = places.map(v=>`<option ${state.place===v?"selected":""} value="${v}">${v}</option>`).join('');
   $("#owner").innerHTML = owners.map(v=>`<option ${state.owner===v?"selected":""} value="${v}">${v}</option>`).join('');
@@ -376,7 +367,6 @@ function renderSide(items){
     ${!now.length && !next.length ? `<div class="item"><div class="muted">표시할 일정이 없습니다.</div></div>`:""}
   `;
 
-  // 연락(전화/채널 없으면 -)
   const contacts = uniq(items.map(it=>({owner:it.owner, phone:it.phone||"-", channel:it.channel||"-"})),"owner");
   $("#contacts").innerHTML = contacts.map(c=>`
     <div class="item">
@@ -399,7 +389,7 @@ function rowNowNext(it,label){
 }
 
 function render(){
-  const itemsAllToday = DATA.items.filter(i=>i.program===state.program && i.date===state.date);
+  const allForProgram = DATA.items.filter(i=>i.program===state.program && i.date===state.date);
   const items = filterItems();
   renderFilters(DATA.items.filter(i=>i.program===state.program && i.date===state.date));
   renderTimeline(items);
@@ -442,9 +432,6 @@ function openModal(json){
   $("#backdrop").classList.add("show");
 }
 function closeModal(){ $("#backdrop").classList.remove("show") }
-
-/* start */
-bootstrap();
 </script>
 </body>
 </html>
