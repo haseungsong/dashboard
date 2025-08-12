@@ -26,16 +26,29 @@
   .lane-head{padding:8px 10px;border-radius:10px;background:#fff;border:1px solid var(--line);font-weight:700}
 
   /* ── 타임라인(레이어/여백 조정) ─────────────────────────── */
-  .timeline{position:relative;border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden}
+  .timeline{
+    position:relative;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    overflow:hidden;
+    /* ✅ 시간 라벨 높이만큼 실제 여백을 timeline에 부여 */
+    padding-top:48px;
+  }
   .ticks{position:absolute;inset:0;pointer-events:none; z-index:0;}   /* 격자선은 뒤 */
   .ticks div{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
   .ticks label{position:absolute;top:6px;transform:translateX(-50%);font-size:11px;color:var(--muted);background:#fff;padding:0 4px}
-  .bars{position:relative; z-index:1; padding:48px 0 26px;}            /* ⬅️ 시간 라벨 아래에서 시작 */
+
+  /* ✅ 막대 컨테이너는 상단 패딩 제거 (여백은 timeline이 담당) */
+  .bars{position:relative; z-index:1; padding:0 0 26px;}
+
   .bar{position:absolute;height:28px;border-radius:7px;color:#fff;background:#111827;display:flex;align-items:center;gap:6px;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid #0b1220}
   .bar.live{background:var(--barLive);border-color:#056081}
   .bar small{opacity:.9}
   .bar:focus{outline:2px solid var(--accent);outline-offset:1px}
-  .now{position:absolute;top:0;bottom:0;width:2px;background:#ef4444; z-index:2;} /* 현재시각선은 최상단 */
+
+  /* 현재시각선 최상단 */
+  .now{position:absolute;top:0;bottom:0;width:2px;background:#ef4444; z-index:2;}
 
   .legend{display:flex;gap:8px;flex-wrap:wrap; user-select:none}
   .chip{background:#f1f5f9;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:12px}
@@ -80,9 +93,6 @@
 
   /* 모달 열릴 때 본문 스크롤 잠금 */
   body.modal-open{ overflow:hidden; }
-
-  .timeline > .bars{ padding-top:40px !important; z-index:1; }
-  .timeline > .ticks{ z-index:0; }
 </style>
 </head>
 <body>
@@ -365,7 +375,7 @@ function filterItems(){
     const okQ = !q || text.includes(q);
     const okP = state.place==="ALL" || it.place===state.place;
     const okO = state.owner==="ALL" || it.owner===state.owner;
-    const okC = state.company==="ALL" || (it.company||"")===state.company;
+    const okC = state.company==="ALL" || (it.company||"")===it.company;
     return okQ && okP && okO && okC;
   });
 }
@@ -408,9 +418,9 @@ function renderTimeline(items){
     </div>` + headHTML;
 
   function buildTicks(el){
-    let html=""; 
+    let html="";
     for(let m=startMin; m<=endMin; m+=60){
-      const left=pct(m); 
+      const left=pct(m);
       html+=`<div style="left:${left}%;"></div><label style="left:${left}%;">${String(Math.floor(m/60)).padStart(2,"0")}:00</label>`;
     }
     el.innerHTML = html;
