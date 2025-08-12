@@ -412,10 +412,8 @@ function renderTimeline(items){
       <div class="now" data-now style="display:none"></div>
     </div>
   `).join('');
-  grid.innerHTML = `<div class="hide-m"></div>
-    <div class="timeline" style="height:48px">
-      <div class="ticks" id="topTicks"></div>
-    </div>` + headHTML;
+  
+  grid.innerHTML = headHTML;
 
   function buildTicks(el){
     let html="";
@@ -425,7 +423,7 @@ function renderTimeline(items){
     }
     el.innerHTML = html;
   }
-  buildTicks($("#topTicks"));
+
   $$("#grid [data-ticks]").forEach(buildTicks);
 
   places.forEach((place, idx)=>{
@@ -566,3 +564,4 @@ function closeModal(){
 </script>
 </body>
 </html>
+
